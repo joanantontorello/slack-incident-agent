@@ -80,7 +80,8 @@ export default function Page() {
       'C097D0JTL48': 'administración',
       'C096QADCNMQ': 'general',
     };
-    return map[id] || id.slice(-4);
+    if (!id) return 'canal';
+    return map[id] || String(id).slice(-4);
   }, []);
 
   const loadAll = useCallback(async () => {
