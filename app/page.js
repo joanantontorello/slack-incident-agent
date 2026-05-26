@@ -191,6 +191,7 @@ export default function Page() {
   const [modalMessages, setModalMessages] = useState([]);
   const [modalUsers, setModalUsers] = useState({});
   const [modalLoading, setModalLoading] = useState(false);
+  const [toast, setToast] = useState(null);
 
   useEffect(() => { setState(loadState()); }, []);
 
@@ -366,18 +367,36 @@ export default function Page() {
     return () => window.removeEventListener('keydown', onKey);
   }, [modalCase, closeModal]);
 
+  const showToast = useCallback((msg, kind = 'info') => {
+    setToast({ msg, kind, id: Date.now() });
+    setTimeout(() => setToast(t => (t && Date.now() - t.id >= 4500) ? null : t), 5000);
+  }, []);
+
   const syncSlackDone = useCallback(async (c, undo = false) => {
     if (!c || !c.channelId || !c.ts) return;
     try {
-      await fetch('/api/done', {
+      const res = await fetch('/api/done', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ channel: c.channelId, ts: c.ts, undo }),
       });
+      const data = await res.json().catch(() => ({}));
+      const reaction = data.reaction;
+      const mark = data.mark;
+      const reactionOK = reaction === 'ok' || reaction === 'noop';
+      const markOK = mark === 'ok' || (mark && mark.startsWith('skipped'));
+      if (reactionOK && markOK) {
+        showToast(undo ? '↩ Reacción quitada en Slack' : '✅ Marcado en Slack', 'ok');
+      } else {
+        const parts = [];
+        if (!reactionOK) parts.push(`reacción: ${reaction || 'sin respuesta'}`);
+        if (!markOK)     parts.push(`mark: ${mark}`);
+        showToast(`⚠️ Sync parcial → ${parts.join(' · ')}`, 'warn');
+      }
     } catch (e) {
-      // silent — la sync es best-effort
+      showToast(`❌ Sync falló: ${e.message || e}`, 'err');
     }
-  }, []);
+  }, [showToast]);
 
   const setCaseStatus = (caseId, status) => {
     const prev = state.cases[caseId] || {};
@@ -524,6 +543,11 @@ export default function Page() {
         .modal-msg .text .link { color: #2563eb; text-decoration: underline; }
         .modal-msg .text .link:hover { color: #1d4ed8; }
         .modal-footer { padding: 10px 18px; border-top: 1px solid #e5e7eb; display: flex; justify-content: flex-end; gap: 8px; background: #f8f9fb; }
+        .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 10px 16px; border-radius: 8px; font-size: 12.5px; box-shadow: 0 6px 20px rgba(0,0,0,0.18); z-index: 200; max-width: 90vw; }
+        .toast.ok   { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+        .toast.warn { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+        .toast.err  { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+        .toast.info { background: #e0e7ff; color: #3730a3; border: 1px solid #a5b4fc; }
       `}</style>
 
       <div className="header">
@@ -650,6 +674,10 @@ export default function Page() {
           })
         )}
       </div>
+
+      {toast && (
+        <div className={`toast ${toast.kind}`} onClick={() => setToast(null)}>{toast.msg}</div>
+      )}
 
       {modalCase && (
         <div className="modal-overlay" onClick={closeModal}>
