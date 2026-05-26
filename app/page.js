@@ -410,12 +410,13 @@ export default function Page() {
       const data = await res.json().catch(() => ({}));
       const reaction = data.reaction;
       const mark = data.mark;
+      const as = data.reactionAs || '?';
       const reactionOK = reaction === 'ok' || reaction === 'noop';
       const markOK = mark === 'ok' || (mark && mark.startsWith('skipped'));
       if (reactionOK && markOK) {
-        showToast(undo ? '↩ Reacción quitada en Slack' : '✅ Marcado en Slack', 'ok');
+        showToast(undo ? `↩ Reacción quitada en Slack (como ${as})` : `✅ Marcado en Slack (como ${as})`, 'ok');
       } else {
-        const parts = [];
+        const parts = [`as=${as}`];
         if (!reactionOK) parts.push(`reacción: ${reaction || 'sin respuesta'}`);
         if (!markOK)     parts.push(`mark: ${mark}`);
         showToast(`⚠️ Sync parcial → ${parts.join(' · ')}`, 'warn');
