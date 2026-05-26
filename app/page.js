@@ -4,6 +4,45 @@ import { useEffect, useState, useCallback } from 'react';
 
 const STORAGE_KEY = 'pipeline_incidencias_v1';
 
+// Emojis Slack más usados → unicode. Para los que no estén, se deja `:name:`.
+const EMOJI_MAP = {
+  '+1': '👍', '-1': '👎', thumbsup: '👍', thumbsdown: '👎', ok_hand: '👌',
+  wave: '👋', clap: '👏', pray: '🙏', muscle: '💪', point_up: '☝️', point_down: '👇',
+  point_right: '👉', point_left: '👈', raised_hands: '🙌',
+  white_check_mark: '✅', heavy_check_mark: '✔️', check: '✅', ballot_box_with_check: '☑️',
+  x: '❌', negative_squared_cross_mark: '❎', warning: '⚠️', no_entry: '⛔', no_entry_sign: '🚫',
+  fire: '🔥', sparkles: '✨', star: '⭐', star2: '🌟', boom: '💥', zap: '⚡',
+  eyes: '👀', thinking_face: '🤔', face_with_monocle: '🧐', scream: '😱', sunglasses: '😎',
+  smile: '😄', smiley: '😃', grin: '😁', laughing: '😆', joy: '😂', rofl: '🤣',
+  slightly_smiling_face: '🙂', wink: '😉', heart_eyes: '😍', kissing_heart: '😘',
+  blush: '😊', innocent: '😇', cry: '😢', sob: '😭', sweat: '😓', sweat_smile: '😅',
+  disappointed: '😞', confused: '😕', neutral_face: '😐', expressionless: '😑',
+  tada: '🎉', confetti_ball: '🎊', rocket: '🚀', bulb: '💡', mag: '🔍', mag_right: '🔎',
+  bell: '🔔', no_bell: '🔕', calendar: '📅', date: '📆', clock1: '🕐', alarm_clock: '⏰',
+  phone: '📞', telephone_receiver: '📞', email: '📧', envelope: '✉️', love_letter: '💌',
+  moneybag: '💰', money_with_wings: '💸', dollar: '💵', euro: '💶', credit_card: '💳',
+  chart_with_upwards_trend: '📈', chart_with_downwards_trend: '📉', bar_chart: '📊',
+  heart: '❤️', broken_heart: '💔', orange_heart: '🧡', yellow_heart: '💛',
+  green_heart: '💚', blue_heart: '💙', purple_heart: '💜', black_heart: '🖤',
+  question: '❓', exclamation: '❗', grey_question: '❔', grey_exclamation: '❕',
+  pushpin: '📌', round_pushpin: '📍', paperclip: '📎', link: '🔗', lock: '🔒', unlock: '🔓', key: '🔑',
+  white_circle: '⚪', black_circle: '⚫', red_circle: '🔴', large_blue_circle: '🔵',
+  large_orange_circle: '🟠', large_yellow_circle: '🟡', large_green_circle: '🟢', large_purple_circle: '🟣',
+  arrow_right: '➡️', arrow_left: '⬅️', arrow_up: '⬆️', arrow_down: '⬇️',
+  arrow_up_small: '🔼', arrow_down_small: '🔽', back: '🔙', soon: '🔜',
+  hourglass: '⌛', hourglass_flowing_sand: '⏳', stopwatch: '⏱️',
+  raising_hand: '🙋', man_raising_hand: '🙋‍♂️', woman_raising_hand: '🙋‍♀️',
+  bow: '🙇', man_bowing: '🙇‍♂️', woman_bowing: '🙇‍♀️',
+  handshake: '🤝', writing_hand: '✍️', speech_balloon: '💬', thought_balloon: '💭',
+  hammer: '🔨', wrench: '🔧', gear: '⚙️', construction: '🚧',
+  computer: '💻', desktop_computer: '🖥️', iphone: '📱', headphones: '🎧',
+  page_facing_up: '📄', page_with_curl: '📃', clipboard: '📋', notebook: '📓', books: '📚',
+  memo: '📝', pencil: '✏️', pencil2: '✏️', closed_book: '📕', green_book: '📗', blue_book: '📘',
+  package: '📦', gift: '🎁', shopping_cart: '🛒', truck: '🚚',
+  trophy: '🏆', medal: '🏅', '100': '💯', first_place_medal: '🥇',
+  hand: '✋', wave_tone: '👋', skin: '👌',
+};
+
 // ============ HELPERS ============
 function loadState() {
   if (typeof window === 'undefined') return { cases: {} };
@@ -38,23 +77,38 @@ function ageFromTs(ts) {
   return { text: `hace ${days}d`, cls: 'age-old' };
 }
 
-function shortenText(s, n) {
+function decodeEntities(s) {
+  return String(s || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ');
+}
+
+function shortenText(s, n, users) {
   if (!s) return '';
-  s = s.replace(/<mailto:[^|>]+\|([^>]+)>/g, '$1')
+  s = decodeEntities(s)
+       .replace(/<mailto:[^|>]+\|([^>]+)>/g, '$1')
        .replace(/<tel:[^|>]+\|([^>]+)>/g, '$1')
        .replace(/<@[^|>]+\|([^>]+)>/g, '@$1')
-       .replace(/<@[A-Z0-9]+>/g, '')
+       .replace(/<@([A-Z0-9]+)>/g, (m, id) => users && users[id] ? '@' + users[id] : '')
+       .replace(/<#[A-Z0-9]+\|([^>]+)>/g, '#$1')
        .replace(/<!channel>/g, '@channel')
-       .replace(/[:_]/g, ' ')
+       .replace(/<!here>/g, '@here')
+       .replace(/<((https?:[^|>]+))\|([^>]+)>/g, '$3')
+       .replace(/<(https?:[^>]+)>/g, '$1')
+       .replace(/:([a-z0-9_+-]+):/g, (m, name) => EMOJI_MAP[name] || m)
        .replace(/\s+/g, ' ')
        .trim();
   return s.length > n ? s.slice(0, n).trim() + '…' : s;
 }
 
-function extractTitle(text) {
-  const cleaned = shortenText(text, 200);
+function extractTitle(text, users) {
+  const cleaned = shortenText(text, 200, users);
   const lines = cleaned.split(/\n|—|\*/).filter(l => l.trim().length > 3);
-  return lines.length > 0 ? shortenText(lines[0], 90) : shortenText(cleaned, 90);
+  return lines.length > 0 ? shortenText(lines[0], 90, users) : shortenText(cleaned, 90, users);
 }
 
 function buildSlackLink(channelId, ts, teamUrl) {
@@ -76,18 +130,46 @@ function buildSlackDeepLink(channelId, ts, teamId) {
   return `slack://channel?team=${teamId}&id=${channelId}&message=${ts}`;
 }
 
-// Limpia formato Slack sin truncar (para el modal).
-function cleanText(s) {
+// Convierte texto Slack en array de React nodes con menciones, links,
+// emojis y entidades HTML resueltas. Para el modal (preserva saltos).
+function formatSlackText(s, users) {
   if (!s) return '';
-  return String(s)
-    .replace(/<mailto:[^|>]+\|([^>]+)>/g, '$1')
-    .replace(/<tel:[^|>]+\|([^>]+)>/g, '$1')
-    .replace(/<@[^|>]+\|([^>]+)>/g, '@$1')
-    .replace(/<@([A-Z0-9]+)>/g, '@$1')
-    .replace(/<!channel>/g, '@channel')
-    .replace(/<!here>/g, '@here')
-    .replace(/<((https?:[^|>]+))\|([^>]+)>/g, '$3 ($1)')
-    .replace(/<((https?:[^>]+))>/g, '$1');
+  const text = decodeEntities(s);
+  const TOKEN_RE = /<@([A-Z0-9]+)(?:\|([^>]+))?>|<#([A-Z0-9]+)(?:\|([^>]+))?>|<!(channel|here|everyone)>|<mailto:([^|>]+)(?:\|([^>]+))?>|<(https?:[^|>]+)(?:\|([^>]+))?>|:([a-z0-9_+-]+):/g;
+  const out = [];
+  let last = 0;
+  let m;
+  let key = 0;
+  while ((m = TOKEN_RE.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    const [, userId, userLabel, chId, chLabel, broadcast, mail, mailLabel, url, urlLabel, emojiName] = m;
+    if (userId) {
+      const name = userLabel || (users && users[userId]) || userId;
+      out.push(<span key={key++} className="mention">@{name}</span>);
+    } else if (chId) {
+      out.push(<span key={key++} className="mention">#{chLabel || chId}</span>);
+    } else if (broadcast) {
+      out.push(<span key={key++} className="mention">@{broadcast}</span>);
+    } else if (mail) {
+      out.push(<a key={key++} href={`mailto:${mail}`} className="link">{mailLabel || mail}</a>);
+    } else if (url) {
+      out.push(<a key={key++} href={url} target="_blank" rel="noopener noreferrer" className="link">{urlLabel || url}</a>);
+    } else if (emojiName) {
+      out.push(EMOJI_MAP[emojiName] || `:${emojiName}:`);
+    }
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+// Hash determinista user_id → color de la paleta (para diferenciar autores).
+const AUTHOR_PALETTE = ['#7c3aed', '#0891b2', '#ea580c', '#db2777', '#0d9488', '#ca8a04', '#4338ca', '#9333ea', '#e11d48', '#16a34a', '#2563eb', '#b45309'];
+function colorForUser(id) {
+  if (!id) return '#6b7280';
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return AUTHOR_PALETTE[h % AUTHOR_PALETTE.length];
 }
 
 function formatTs(ts) {
@@ -102,6 +184,7 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all');
+  const [activeCategory, setActiveCategory] = useState('all');
   const [config, setConfig] = useState({ myUserId: '', channels: [], team: null });
   const [progress, setProgress] = useState('');
   const [modalCase, setModalCase] = useState(null);
@@ -229,10 +312,10 @@ export default function Page() {
             id: `${f.channel}-${f.ts}`,
             channelId: f.channel,
             ts: f.ts,
-            title: extractTitle(rootText) || '(sin título)',
-            summary: shortenText(rootText, 180),
+            title: extractTitle(rootText, users) || '(sin título)',
+            summary: shortenText(rootText, 180, users),
             lastUser: users[lastUserId] || lastUserId || 'desconocido',
-            lastText: shortenText(lastText, 150),
+            lastText: shortenText(lastText, 150, users),
             category: categorize(allText),
             waitingForMe,
             link: buildSlackLink(f.channel, f.ts, cfgRes?.team?.url),
@@ -297,7 +380,13 @@ export default function Page() {
   };
 
   // Filter and bucket
-  const filtered = cases.filter(c => activeFilter === 'all' || c.channelId === activeFilter);
+  const filtered = cases.filter(c =>
+    (activeFilter === 'all' || c.channelId === activeFilter) &&
+    (activeCategory === 'all' || c.category.key === activeCategory)
+  );
+  const categoryCounts = cases
+    .filter(c => activeFilter === 'all' || c.channelId === activeFilter)
+    .reduce((acc, c) => { acc[c.category.key] = (acc[c.category.key] || 0) + 1; return acc; }, {});
   const buckets = { todo: [], doing: [], done: [] };
   const archived = [];
   for (const c of filtered) {
@@ -327,6 +416,11 @@ export default function Page() {
         .channel-filter { display: flex; gap: 6px; flex-wrap: wrap; }
         .channel-filter button { background: #fff; border: 1px solid #d1d5db; border-radius: 14px; padding: 3px 10px; font-size: 11px; cursor: pointer; color: #444; }
         .channel-filter button.active { background: #4f46e5; color: white; border-color: #4f46e5; }
+        .filter-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 16px; background: #fff; border-bottom: 1px solid #e5e7eb; }
+        .filter-row .label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600; }
+        .filter-row button { background: #fff; border: 1px solid #d1d5db; border-radius: 14px; padding: 3px 10px; font-size: 11px; cursor: pointer; color: #444; }
+        .filter-row button.active { background: #111; color: white; border-color: #111; }
+        .filter-row button .count { color: inherit; opacity: 0.7; margin-left: 4px; font-size: 10px; }
         .refresh-btn { background: #4f46e5; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; }
         .refresh-btn:disabled { opacity: 0.5; cursor: wait; }
         .board { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; padding: 12px; min-height: calc(100vh - 60px); }
@@ -383,11 +477,14 @@ export default function Page() {
         .modal-close { background: none; border: none; font-size: 22px; line-height: 1; cursor: pointer; color: #6b7280; padding: 0 4px; }
         .modal-close:hover { color: #111; }
         .modal-body { overflow-y: auto; padding: 14px 18px; flex: 1; }
-        .modal-msg { padding: 10px 0; border-bottom: 1px solid #f1f3f7; }
-        .modal-msg:last-child { border-bottom: none; }
-        .modal-msg .author { font-weight: 600; font-size: 12.5px; color: #111; }
-        .modal-msg .time { font-size: 11px; color: #9ca3af; margin-left: 8px; }
-        .modal-msg .text { font-size: 13px; color: #1f2937; margin-top: 4px; white-space: pre-wrap; word-break: break-word; line-height: 1.5; }
+        .modal-msg { padding: 10px 12px; margin-bottom: 8px; border-radius: 8px; border-left: 4px solid #ddd; background: #fafbfc; }
+        .modal-msg:last-child { margin-bottom: 0; }
+        .modal-msg .author { font-weight: 700; font-size: 13px; }
+        .modal-msg .time { font-size: 11px; color: #9ca3af; margin-left: 8px; font-weight: 400; }
+        .modal-msg .text { font-size: 13.5px; color: #1f2937; margin-top: 4px; white-space: pre-wrap; word-break: break-word; line-height: 1.55; }
+        .modal-msg .text .mention { background: #e0e7ff; color: #4338ca; padding: 1px 5px; border-radius: 4px; font-weight: 500; }
+        .modal-msg .text .link { color: #2563eb; text-decoration: underline; }
+        .modal-msg .text .link:hover { color: #1d4ed8; }
         .modal-footer { padding: 10px 18px; border-top: 1px solid #e5e7eb; display: flex; justify-content: flex-end; gap: 8px; background: #f8f9fb; }
       `}</style>
 
@@ -410,6 +507,25 @@ export default function Page() {
           ))}
           <button className="refresh-btn" onClick={loadAll} disabled={loading}>↻ {loading ? 'Cargando…' : 'Refrescar'}</button>
         </div>
+      </div>
+
+      <div className="filter-row">
+        <span className="label">Categoría:</span>
+        {[
+          { key: 'all', label: 'Todas', cls: '' },
+          { key: 'acceso', label: '🔴 Acceso', cls: 'badge-acceso' },
+          { key: 'reembolso', label: '💰 Reembolso', cls: 'badge-reembolso' },
+          { key: 'otro', label: '📌 Otro', cls: 'badge-otro' },
+        ].map(cat => {
+          const count = cat.key === 'all'
+            ? Object.values(categoryCounts).reduce((a, b) => a + b, 0)
+            : (categoryCounts[cat.key] || 0);
+          return (
+            <button key={cat.key} className={activeCategory === cat.key ? 'active' : ''} onClick={() => setActiveCategory(cat.key)}>
+              {cat.label}<span className="count">({count})</span>
+            </button>
+          );
+        })}
       </div>
 
       {error && <div className="error">Error: {error}</div>}
@@ -509,15 +625,20 @@ export default function Page() {
                 <div className="loading"><span className="spinner"></span> Cargando hilo…</div>
               ) : modalMessages.length === 0 ? (
                 <div className="empty">No se pudo cargar el hilo.</div>
-              ) : modalMessages.map((m, i) => (
-                <div key={(m && m.ts) || i} className="modal-msg">
-                  <div>
-                    <span className="author">{(m && modalUsers[m.user]) || (m && m.user) || 'desconocido'}</span>
-                    <span className="time">{m && m.ts ? formatTs(m.ts) : ''}</span>
+              ) : modalMessages.map((m, i) => {
+                const uid = (m && m.user) || '';
+                const color = colorForUser(uid);
+                const author = (m && modalUsers[uid]) || uid || 'desconocido';
+                return (
+                  <div key={(m && m.ts) || i} className="modal-msg" style={{ borderLeftColor: color, background: color + '0d' }}>
+                    <div>
+                      <span className="author" style={{ color }}>{author}</span>
+                      <span className="time">{m && m.ts ? formatTs(m.ts) : ''}</span>
+                    </div>
+                    <div className="text">{formatSlackText(m && m.text, modalUsers)}</div>
                   </div>
-                  <div className="text">{cleanText(m && m.text)}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <div className="modal-footer">
               <a className="btn btn-primary" href={modalCase.deepLink || modalCase.link} target="slack-thread" rel="noopener noreferrer">💬 Abrir en Slack</a>
