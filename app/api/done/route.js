@@ -16,15 +16,18 @@ export async function POST(req) {
     return NextResponse.json({ ok: false, error: 'missing channel or ts' }, { status: 400 });
   }
 
-  const result = { reaction: null, mark: null };
+  const result = { reaction: null, mark: null, reactionAs: null };
 
-  // 1) Reacción (bot)
+  // 1) Reacción. Si hay user token, la pone Joan (aparece como su user);
+  //    si no, la pone el bot.
+  const useUserForReaction = hasUserToken();
+  result.reactionAs = useUserForReaction ? 'user' : 'bot';
   try {
     await slackFetch(undo ? 'reactions.remove' : 'reactions.add', {
       channel,
       timestamp: ts,
       name: 'white_check_mark',
-    });
+    }, { useUserToken: useUserForReaction });
     result.reaction = 'ok';
   } catch (e) {
     const msg = String(e.message || e);
