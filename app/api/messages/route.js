@@ -31,7 +31,7 @@ export async function GET(request) {
           username: m.username || null,
           text: m.text || '',
           reply_count: m.reply_count || 0,
-          reactions: (m.reactions || []).map(r => ({ name: r.name, count: r.count })),
+          reactions: (m.reactions || []).map(r => ({ name: r.name, count: r.count, users: r.users || [] })),
           subtype: m.subtype || null,
         })),
       };

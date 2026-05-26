@@ -25,6 +25,7 @@ export async function GET(request) {
         user: m.user || m.bot_id || 'unknown',
         username: m.username || null,
         text: m.text || '',
+        reactions: (m.reactions || []).map(r => ({ name: r.name, count: r.count, users: r.users || [] })),
       })),
     }, {
       headers: { 'Cache-Control': 'no-store' },

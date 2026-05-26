@@ -205,6 +205,11 @@ export default function Page() {
     return map[id] || String(id).slice(-4);
   }, []);
 
+  const showToast = useCallback((msg, kind = 'info') => {
+    setToast({ msg, kind, id: Date.now() });
+    setTimeout(() => setToast(t => (t && Date.now() - t.id >= 4500) ? null : t), 5000);
+  }, []);
+
   const loadAll = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -309,6 +314,12 @@ export default function Page() {
             return allText.includes(myId);
           })();
 
+          // ¿Joan reaccionó con ✅ al mensaje raíz? → considerar Hecho.
+          const rootReactions = Array.isArray(root.reactions) ? root.reactions : [];
+          const checkedByMe = myId && rootReactions.some(r =>
+            r && r.name === 'white_check_mark' && Array.isArray(r.users) && r.users.includes(myId)
+          );
+
           allCases.push({
             id: `${f.channel}-${f.ts}`,
             channelId: f.channel,
@@ -319,6 +330,7 @@ export default function Page() {
             lastText: shortenText(lastText, 150, users),
             category: categorize(allText),
             waitingForMe,
+            checkedByMe,
             link: buildSlackLink(f.channel, f.ts, cfgRes?.team?.url),
             deepLink: buildSlackDeepLink(f.channel, f.ts, cfgRes?.team?.team_id),
             replyCount: replies.length,
@@ -329,6 +341,26 @@ export default function Page() {
       }
 
       setCases(allCases);
+
+      // Auto-promoción a "done" en localStorage para todos los hilos en los
+      // que Joan ya reaccionó con ✅ en Slack (única fuente de verdad).
+      const current = loadState();
+      const nextCases = { ...current.cases };
+      let promoted = 0;
+      for (const c of allCases) {
+        if (!c.checkedByMe) continue;
+        const prev = nextCases[c.id] || {};
+        if (prev.status !== 'done') {
+          nextCases[c.id] = { ...prev, status: 'done', doneAt: prev.doneAt || Date.now(), autoFromSlack: true };
+          promoted++;
+        }
+      }
+      if (promoted > 0) {
+        const ns = { ...current, cases: nextCases };
+        setState(ns); saveState(ns);
+        showToast(`✅ ${promoted} ${promoted === 1 ? 'hilo movido' : 'hilos movidos'} a Hecho (reacción ✅ en Slack)`, 'ok');
+      }
+
       setLoading(false);
       setProgress('');
     } catch (e) {
@@ -366,11 +398,6 @@ export default function Page() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [modalCase, closeModal]);
-
-  const showToast = useCallback((msg, kind = 'info') => {
-    setToast({ msg, kind, id: Date.now() });
-    setTimeout(() => setToast(t => (t && Date.now() - t.id >= 4500) ? null : t), 5000);
-  }, []);
 
   const syncSlackDone = useCallback(async (c, undo = false) => {
     if (!c || !c.channelId || !c.ts) return;
