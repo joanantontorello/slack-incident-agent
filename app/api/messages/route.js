@@ -15,8 +15,8 @@ export async function GET(request) {
     return NextResponse.json({ error: 'No channels configured in SLACK_CHANNELS' }, { status: 500 });
   }
 
-  try {
-    const results = await Promise.all(channels.map(async (ch) => {
+  const results = await Promise.all(channels.map(async (ch) => {
+    try {
       const data = await slackFetch('conversations.history', {
         channel: ch.id,
         oldest: String(oldest),
@@ -35,11 +35,17 @@ export async function GET(request) {
           subtype: m.subtype || null,
         })),
       };
-    }));
-    return NextResponse.json({ channels: results }, {
-      headers: { 'Cache-Control': 'no-store' },
-    });
-  } catch (e) {
-    return NextResponse.json({ error: String(e.message || e) }, { status: 500 });
-  }
+    } catch (e) {
+      // Canal sin permiso / no in channel — devolvemos vacío para no romper la app
+      return {
+        channel: ch.id,
+        filter: ch.filter,
+        messages: [],
+        slackError: String(e.message || e),
+      };
+    }
+  }));
+  return NextResponse.json({ channels: results }, {
+    headers: { 'Cache-Control': 'no-store' },
+  });
 }

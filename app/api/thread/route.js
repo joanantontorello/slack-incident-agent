@@ -30,6 +30,14 @@ export async function GET(request) {
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (e) {
-    return NextResponse.json({ error: String(e.message || e) }, { status: 500 });
+    // Algunos hilos pueden no estar accesibles (thread_not_found, not_in_channel, etc.)
+    // Devolvemos lista vacía con info de error para no romper el frontend.
+    return NextResponse.json({
+      messages: [],
+      slackError: String(e.message || e),
+    }, {
+      status: 200,
+      headers: { 'Cache-Control': 'no-store' },
+    });
   }
 }
