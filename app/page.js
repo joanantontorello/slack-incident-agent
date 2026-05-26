@@ -366,8 +366,42 @@ export default function Page() {
     return () => window.removeEventListener('keydown', onKey);
   }, [modalCase, closeModal]);
 
+  const syncSlackDone = useCallback(async (c, undo = false) => {
+    if (!c || !c.channelId || !c.ts) return;
+    try {
+      await fetch('/api/done', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: c.channelId, ts: c.ts, undo }),
+      });
+    } catch (e) {
+      // silent — la sync es best-effort
+    }
+  }, []);
+
   const setCaseStatus = (caseId, status) => {
-    const s = { ...state, cases: { ...state.cases, [caseId]: { ...(state.cases[caseId] || {}), status, ...(status === 'done' ? { doneAt: Date.now() } : {}) } } };
+    const prev = state.cases[caseId] || {};
+    const s = { ...state, cases: { ...state.cases, [caseId]: { ...prev, status, ...(status === 'done' ? { doneAt: Date.now() } : {}) } } };
+    setState(s); saveState(s);
+    // Sync con Slack al pasar a/desde "done"
+    const c = cases.find(x => x.id === caseId);
+    if (c) {
+      if (status === 'done' && prev.status !== 'done') syncSlackDone(c, false);
+      else if (status !== 'done' && prev.status === 'done') syncSlackDone(c, true);
+    }
+  };
+
+  const archiveAllDone = () => {
+    const doneIds = cases
+      .filter(c => (state.cases[c.id]?.status || 'todo') === 'done' && !state.cases[c.id]?.archived)
+      .map(c => c.id);
+    if (doneIds.length === 0) return;
+    if (!confirm(`¿Archivar ${doneIds.length} ${doneIds.length === 1 ? 'tarjeta' : 'tarjetas'} de Hecho?`)) return;
+    const next = { ...state.cases };
+    for (const id of doneIds) {
+      next[id] = { ...(next[id] || {}), archived: true };
+    }
+    const s = { ...state, cases: next };
     setState(s); saveState(s);
   };
   const archiveCase = (caseId) => {
@@ -431,6 +465,10 @@ export default function Page() {
         .col[data-col="done"]  { background: linear-gradient(180deg, #d1fae5 0%, #f0fdf4 35%, #f5f6f9 100%); border-color: #a7f3d0; }
         .col-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 8px; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; }
         .col-header .count { background: rgba(255,255,255,0.85); border-radius: 10px; padding: 1px 8px; font-size: 11px; color: #555; }
+        .col-header .col-actions { display: flex; gap: 6px; align-items: center; }
+        .col-header .archive-all { background: rgba(255,255,255,0.85); border: 1px solid #a7f3d0; color: #065f46; font-size: 10px; padding: 2px 8px; border-radius: 10px; cursor: pointer; text-transform: none; letter-spacing: 0; font-weight: 500; }
+        .col-header .archive-all:hover { background: #fff; }
+        .col-header .archive-all:disabled { opacity: 0.4; cursor: not-allowed; }
         .col[data-col="todo"]  .col-header { color: #b91c1c; }
         .col[data-col="doing"] .col-header { color: #a16207; }
         .col[data-col="done"]  .col-header { color: #15803d; }
@@ -542,7 +580,14 @@ export default function Page() {
               <div key={colKey} className="col" data-col={colKey}>
                 <div className="col-header">
                   <span>{labels[colKey]}</span>
-                  <span className="count">{items.length}</span>
+                  <span className="col-actions">
+                    {colKey === 'done' && (
+                      <button className="archive-all" onClick={archiveAllDone} disabled={items.length === 0} title="Archivar todas las tarjetas de Hecho">
+                        🗑 Archivar todos
+                      </button>
+                    )}
+                    <span className="count">{items.length}</span>
+                  </span>
                 </div>
                 <div className="cards">
                   {items.length === 0 ? (

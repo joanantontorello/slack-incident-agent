@@ -1,10 +1,12 @@
 // Helper for calling Slack Web API
 const SLACK_API = 'https://slack.com/api';
 
-export async function slackFetch(method, params) {
-  const token = process.env.SLACK_BOT_TOKEN;
+export async function slackFetch(method, params, { useUserToken = false } = {}) {
+  const token = useUserToken
+    ? process.env.SLACK_USER_TOKEN
+    : process.env.SLACK_BOT_TOKEN;
   if (!token) {
-    throw new Error('SLACK_BOT_TOKEN env var not configured');
+    throw new Error(`${useUserToken ? 'SLACK_USER_TOKEN' : 'SLACK_BOT_TOKEN'} env var not configured`);
   }
   const url = new URL(`${SLACK_API}/${method}`);
   for (const [k, v] of Object.entries(params || {})) {
@@ -21,6 +23,10 @@ export async function slackFetch(method, params) {
     throw new Error(`Slack ${method} failed: ${data.error || 'unknown'}`);
   }
   return data;
+}
+
+export function hasUserToken() {
+  return Boolean(process.env.SLACK_USER_TOKEN);
 }
 
 export function getChannelsConfig() {
