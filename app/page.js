@@ -69,6 +69,32 @@ function buildSlackLink(channelId, ts, teamUrl) {
   return `https://slack.com/app_redirect?channel=${channelId}&message_ts=${ts}`;
 }
 
+// slack:// deep link → abre directamente la app de Slack sin la página
+// intermedia "Launching..." y sin acumular pestañas en el navegador.
+function buildSlackDeepLink(channelId, ts, teamId) {
+  if (!teamId) return null;
+  return `slack://channel?team=${teamId}&id=${channelId}&message=${ts}`;
+}
+
+// Limpia formato Slack sin truncar (para el modal).
+function cleanText(s) {
+  if (!s) return '';
+  return String(s)
+    .replace(/<mailto:[^|>]+\|([^>]+)>/g, '$1')
+    .replace(/<tel:[^|>]+\|([^>]+)>/g, '$1')
+    .replace(/<@[^|>]+\|([^>]+)>/g, '@$1')
+    .replace(/<@([A-Z0-9]+)>/g, '@$1')
+    .replace(/<!channel>/g, '@channel')
+    .replace(/<!here>/g, '@here')
+    .replace(/<((https?:[^|>]+))\|([^>]+)>/g, '$3 ($1)')
+    .replace(/<((https?:[^>]+))>/g, '$1');
+}
+
+function formatTs(ts) {
+  const d = new Date(parseFloat(ts) * 1000);
+  return d.toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
 // ============ MAIN COMPONENT ============
 export default function Page() {
   const [cases, setCases] = useState([]);
@@ -78,6 +104,10 @@ export default function Page() {
   const [activeFilter, setActiveFilter] = useState('all');
   const [config, setConfig] = useState({ myUserId: '', channels: [], team: null });
   const [progress, setProgress] = useState('');
+  const [modalCase, setModalCase] = useState(null);
+  const [modalMessages, setModalMessages] = useState([]);
+  const [modalUsers, setModalUsers] = useState({});
+  const [modalLoading, setModalLoading] = useState(false);
 
   useEffect(() => { setState(loadState()); }, []);
 
@@ -206,6 +236,7 @@ export default function Page() {
             category: categorize(allText),
             waitingForMe,
             link: buildSlackLink(f.channel, f.ts, cfgRes?.team?.url),
+            deepLink: buildSlackDeepLink(f.channel, f.ts, cfgRes?.team?.team_id),
             replyCount: replies.length,
           });
         } catch (err) {
@@ -223,6 +254,34 @@ export default function Page() {
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  const openModal = useCallback(async (c) => {
+    setModalCase(c);
+    setModalLoading(true);
+    setModalMessages([]);
+    setModalUsers({});
+    try {
+      const r = await fetch(`/api/thread?channel=${c.channelId}&ts=${c.ts}`).then(r => r.json());
+      const msgs = Array.isArray(r.messages) ? r.messages : [];
+      setModalMessages(msgs);
+      const ids = Array.from(new Set(msgs.map(m => m && m.user).filter(Boolean))).join(',');
+      if (ids) {
+        const ur = await fetch(`/api/users?ids=${ids}`).then(r => r.json());
+        setModalUsers(ur.users || {});
+      }
+    } catch (e) {
+      // silent
+    }
+    setModalLoading(false);
+  }, []);
+  const closeModal = useCallback(() => setModalCase(null), []);
+
+  useEffect(() => {
+    if (!modalCase) return;
+    const onKey = (e) => { if (e.key === 'Escape') closeModal(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [modalCase, closeModal]);
 
   const setCaseStatus = (caseId, status) => {
     const s = { ...state, cases: { ...state.cases, [caseId]: { ...(state.cases[caseId] || {}), status, ...(status === 'done' ? { doneAt: Date.now() } : {}) } } };
@@ -272,14 +331,19 @@ export default function Page() {
         .refresh-btn:disabled { opacity: 0.5; cursor: wait; }
         .board { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; padding: 12px; min-height: calc(100vh - 60px); }
         @media (max-width: 800px) { .board { grid-template-columns: 1fr; } }
-        .col { background: #f1f3f7; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; min-width: 0; }
+        .col { border-radius: 10px; padding: 8px; display: flex; flex-direction: column; min-width: 0; border: 1px solid transparent; }
+        .col[data-col="todo"]  { background: linear-gradient(180deg, #fee2e2 0%, #fef2f2 35%, #f5f6f9 100%); border-color: #fecaca; }
+        .col[data-col="doing"] { background: linear-gradient(180deg, #fef3c7 0%, #fffbeb 35%, #f5f6f9 100%); border-color: #fde68a; }
+        .col[data-col="done"]  { background: linear-gradient(180deg, #d1fae5 0%, #f0fdf4 35%, #f5f6f9 100%); border-color: #a7f3d0; }
         .col-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 8px; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; }
-        .col-header .count { background: #fff; border-radius: 10px; padding: 1px 8px; font-size: 11px; color: #555; }
-        .col[data-col="todo"] .col-header { color: #b91c1c; }
-        .col[data-col="doing"] .col-header { color: #c2410c; }
-        .col[data-col="done"] .col-header { color: #15803d; }
+        .col-header .count { background: rgba(255,255,255,0.85); border-radius: 10px; padding: 1px 8px; font-size: 11px; color: #555; }
+        .col[data-col="todo"]  .col-header { color: #b91c1c; }
+        .col[data-col="doing"] .col-header { color: #a16207; }
+        .col[data-col="done"]  .col-header { color: #15803d; }
         .cards { display: flex; flex-direction: column; gap: 6px; }
-        .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; box-shadow: 0 1px 1px rgba(0,0,0,0.03); }
+        .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; box-shadow: 0 1px 1px rgba(0,0,0,0.03); cursor: pointer; transition: box-shadow 0.15s, transform 0.05s; }
+        .card:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+        .card:active { transform: translateY(1px); }
         .card-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px; font-size: 10.5px; color: #6b7280; }
         .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
         .badge-acceso { background: #fee2e2; color: #b91c1c; }
@@ -309,6 +373,22 @@ export default function Page() {
         .age-fresh { color: #15803d; }
         .age-medium { color: #c2410c; }
         .age-old { color: #b91c1c; font-weight: 500; }
+
+        /* Modal */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.55); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+        .modal { background: #fff; border-radius: 12px; max-width: 720px; width: 100%; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.25); overflow: hidden; }
+        .modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 14px 18px; border-bottom: 1px solid #e5e7eb; }
+        .modal-header h2 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.35; }
+        .modal-header .meta { font-size: 11px; color: #6b7280; margin-top: 4px; }
+        .modal-close { background: none; border: none; font-size: 22px; line-height: 1; cursor: pointer; color: #6b7280; padding: 0 4px; }
+        .modal-close:hover { color: #111; }
+        .modal-body { overflow-y: auto; padding: 14px 18px; flex: 1; }
+        .modal-msg { padding: 10px 0; border-bottom: 1px solid #f1f3f7; }
+        .modal-msg:last-child { border-bottom: none; }
+        .modal-msg .author { font-weight: 600; font-size: 12.5px; color: #111; }
+        .modal-msg .time { font-size: 11px; color: #9ca3af; margin-left: 8px; }
+        .modal-msg .text { font-size: 13px; color: #1f2937; margin-top: 4px; white-space: pre-wrap; word-break: break-word; line-height: 1.5; }
+        .modal-footer { padding: 10px 18px; border-top: 1px solid #e5e7eb; display: flex; justify-content: flex-end; gap: 8px; background: #f8f9fb; }
       `}</style>
 
       <div className="header">
@@ -354,7 +434,7 @@ export default function Page() {
                   ) : items.map(c => {
                     const age = ageFromTs(c.ts);
                     return (
-                      <div key={c.id} className="card">
+                      <div key={c.id} className="card" onClick={() => openModal(c)}>
                         <div className="card-meta">
                           <span>
                             <span className={`badge ${c.category.cls}`}>{c.category.label}</span>{' '}
@@ -367,8 +447,8 @@ export default function Page() {
                         <div className="card-waiting">
                           {c.waitingForMe ? <b>⏳ Espera respuesta tuya</b> : <span style={{ color: '#6b7280' }}>Última: {c.lastUser}</span>}
                         </div>
-                        <div className="card-actions">
-                          <a className="btn btn-primary" href={c.link} target="_blank" rel="noopener noreferrer">💬 Ver hilo</a>
+                        <div className="card-actions" onClick={(e) => e.stopPropagation()}>
+                          <a className="btn btn-primary" href={c.deepLink || c.link} target="slack-thread" rel="noopener noreferrer">💬 Ver hilo</a>
                           {colKey === 'todo' && (
                             <>
                               <button className="btn" onClick={() => setCaseStatus(c.id, 'doing')}>▶ En progreso</button>
@@ -409,6 +489,43 @@ export default function Page() {
           })
         )}
       </div>
+
+      {modalCase && (
+        <div className="modal-overlay" onClick={closeModal}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div style={{ minWidth: 0 }}>
+                <h2>{modalCase.title}</h2>
+                <div className="meta">
+                  <span className={`badge ${modalCase.category.cls}`}>{modalCase.category.label}</span>{' '}
+                  <span className="channel-tag">#{channelLabel(modalCase.channelId)}</span>
+                  {' · '}{modalMessages.length || modalCase.replyCount + 1} mensajes
+                </div>
+              </div>
+              <button className="modal-close" onClick={closeModal} aria-label="Cerrar">×</button>
+            </div>
+            <div className="modal-body">
+              {modalLoading ? (
+                <div className="loading"><span className="spinner"></span> Cargando hilo…</div>
+              ) : modalMessages.length === 0 ? (
+                <div className="empty">No se pudo cargar el hilo.</div>
+              ) : modalMessages.map((m, i) => (
+                <div key={(m && m.ts) || i} className="modal-msg">
+                  <div>
+                    <span className="author">{(m && modalUsers[m.user]) || (m && m.user) || 'desconocido'}</span>
+                    <span className="time">{m && m.ts ? formatTs(m.ts) : ''}</span>
+                  </div>
+                  <div className="text">{cleanText(m && m.text)}</div>
+                </div>
+              ))}
+            </div>
+            <div className="modal-footer">
+              <a className="btn btn-primary" href={modalCase.deepLink || modalCase.link} target="slack-thread" rel="noopener noreferrer">💬 Abrir en Slack</a>
+              <button className="btn" onClick={closeModal}>Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
