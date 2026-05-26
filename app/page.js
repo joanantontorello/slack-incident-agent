@@ -743,6 +743,34 @@ export default function Page() {
             </div>
             <div className="modal-footer">
               <a className="btn btn-primary" href={modalCase.deepLink || modalCase.link} target="slack-thread" rel="noopener noreferrer">💬 Abrir en Slack</a>
+              <span style={{ flex: 1 }} />
+              {(() => {
+                const cur = state.cases[modalCase.id]?.status || 'todo';
+                const doAction = (newStatus) => { setCaseStatus(modalCase.id, newStatus); closeModal(); };
+                const doArchive = () => { archiveCase(modalCase.id); closeModal(); };
+                return (
+                  <>
+                    {cur === 'todo' && (
+                      <>
+                        <button className="btn" onClick={() => doAction('doing')}>▶ En progreso</button>
+                        <button className="btn btn-done" onClick={() => doAction('done')}>✓ Hecho</button>
+                      </>
+                    )}
+                    {cur === 'doing' && (
+                      <>
+                        <button className="btn btn-back" onClick={() => doAction('todo')}>← Por revisar</button>
+                        <button className="btn btn-done" onClick={() => doAction('done')}>✓ Hecho</button>
+                      </>
+                    )}
+                    {cur === 'done' && (
+                      <>
+                        <button className="btn btn-back" onClick={() => doAction('doing')}>↩ Reabrir</button>
+                        <button className="btn btn-back" onClick={doArchive}>🗑 Archivar</button>
+                      </>
+                    )}
+                  </>
+                );
+              })()}
               <button className="btn" onClick={closeModal}>Cerrar</button>
             </div>
           </div>
