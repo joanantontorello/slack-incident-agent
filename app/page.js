@@ -222,11 +222,20 @@ export default function Page() {
       const msgsRes = await fetch('/api/messages?days=14').then(r => r.json());
       if (msgsRes.error) throw new Error(msgsRes.error);
 
-      // Gather all user IDs to resolve names
+      // Gather all user IDs to resolve names (autores + menciones <@U…>)
       const userIdsToResolve = new Set();
+      const collectFromText = (text) => {
+        if (!text) return;
+        const re = /<@([A-Z0-9]+)(?:\|[^>]+)?>/g;
+        let m; while ((m = re.exec(text)) !== null) userIdsToResolve.add(m[1]);
+      };
       (msgsRes.channels || []).forEach(c => {
         const msgs = Array.isArray(c.messages) ? c.messages : [];
-        msgs.forEach(m => { if (m && m.user) userIdsToResolve.add(m.user); });
+        msgs.forEach(m => {
+          if (!m) return;
+          if (m.user) userIdsToResolve.add(m.user);
+          collectFromText(m.text);
+        });
       });
 
       // Identify candidate threads (with replies, or for "mention" channel: any message mentioning me)
@@ -262,7 +271,10 @@ export default function Page() {
           try {
             const r = await fetch(`/api/thread?channel=${f.channel}&ts=${f.ts}`).then(r => r.json());
             threadResults[i] = { f, messages: r.messages || [] };
-            (r.messages || []).forEach(m => { if (m.user) userIdsToResolve.add(m.user); });
+            (r.messages || []).forEach(m => {
+              if (m.user) userIdsToResolve.add(m.user);
+              collectFromText(m.text);
+            });
           } catch (e) {
             threadResults[i] = { f, messages: [], error: e.message };
           }
@@ -380,7 +392,17 @@ export default function Page() {
       const r = await fetch(`/api/thread?channel=${c.channelId}&ts=${c.ts}`).then(r => r.json());
       const msgs = Array.isArray(r.messages) ? r.messages : [];
       setModalMessages(msgs);
-      const ids = Array.from(new Set(msgs.map(m => m && m.user).filter(Boolean))).join(',');
+      // Recolectar autores + menciones <@U…> dentro del texto
+      const idSet = new Set();
+      const re = /<@([A-Z0-9]+)(?:\|[^>]+)?>/g;
+      msgs.forEach(m => {
+        if (m && m.user) idSet.add(m.user);
+        if (m && m.text) {
+          let mm; while ((mm = re.exec(m.text)) !== null) idSet.add(mm[1]);
+          re.lastIndex = 0;
+        }
+      });
+      const ids = Array.from(idSet).join(',');
       if (ids) {
         const ur = await fetch(`/api/users?ids=${ids}`).then(r => r.json());
         setModalUsers(ur.users || {});
