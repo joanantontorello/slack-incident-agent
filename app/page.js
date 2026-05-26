@@ -147,46 +147,55 @@ export default function Page() {
         } catch (e) {}
       }
 
-      // Build cases
+      // Build cases (defensive)
       const allCases = [];
       for (const tr of threadResults) {
-        const { f, messages } = tr;
-        const root = messages[0] || f.root;
-        const replies = messages.slice(1);
+        try {
+          if (!tr) continue;
+          const { f, messages } = tr;
+          if (!f) continue;
+          const msgs = Array.isArray(messages) ? messages : [];
+          const root = msgs[0] || f.root || {};
+          const rootText = String(root.text || '');
+          const rootUser = root.user || '';
+          const replies = msgs.slice(1);
+          const repliesText = replies.map(r => String((r && r.text) || '')).join(' ');
+          const allText = rootText + ' ' + repliesText;
 
-        // For "mention" channel, only include if me is mentioned anywhere
-        if (f.channelFilter === 'mention') {
-          const allText = root.text + ' ' + replies.map(r => r.text).join(' ');
-          if (!allText.includes(myId)) continue;
-        }
-
-        const lastMsg = replies.length > 0 ? replies[replies.length - 1] : root;
-        const waitingForMe = (() => {
-          if (replies.length === 0) {
-            // Mensaje raíz sin respuestas — espera si me menciona y no es mío
-            return root.text.includes(myId) && root.user !== myId;
+          // For "mention" channel, only include if me is mentioned anywhere
+          if (f.channelFilter === 'mention') {
+            if (!myId || !allText.includes(myId)) continue;
           }
-          // La última respuesta no es mía Y se me menciona en el hilo
-          if (lastMsg.user === myId) return false;
-          const allText = root.text + ' ' + replies.map(r => r.text).join(' ');
-          return allText.includes(myId);
-        })();
 
-        const cat = categorize(root.text + ' ' + replies.map(r => r.text).join(' '));
+          const lastMsg = replies.length > 0 ? (replies[replies.length - 1] || {}) : root;
+          const lastUserId = lastMsg.user || rootUser;
+          const lastText = String(lastMsg.text || rootText);
 
-        allCases.push({
-          id: `${f.channel}-${f.ts}`,
-          channelId: f.channel,
-          ts: f.ts,
-          title: extractTitle(root.text),
-          summary: shortenText(root.text, 180),
-          lastUser: users[lastMsg.user] || lastMsg.user,
-          lastText: shortenText(lastMsg.text, 150),
-          category: cat,
-          waitingForMe,
-          link: buildSlackLink(f.channel, f.ts),
-          replyCount: replies.length,
-        });
+          const waitingForMe = (() => {
+            if (!myId) return false;
+            if (replies.length === 0) {
+              return rootText.includes(myId) && rootUser !== myId;
+            }
+            if (lastUserId === myId) return false;
+            return allText.includes(myId);
+          })();
+
+          allCases.push({
+            id: `${f.channel}-${f.ts}`,
+            channelId: f.channel,
+            ts: f.ts,
+            title: extractTitle(rootText) || '(sin título)',
+            summary: shortenText(rootText, 180),
+            lastUser: users[lastUserId] || lastUserId || 'desconocido',
+            lastText: shortenText(lastText, 150),
+            category: categorize(allText),
+            waitingForMe,
+            link: buildSlackLink(f.channel, f.ts),
+            replyCount: replies.length,
+          });
+        } catch (err) {
+          console.error('Error procesando hilo', tr && tr.f, err);
+        }
       }
 
       setCases(allCases);
@@ -368,6 +377,7 @@ export default function Page() {
                     );
                   })}
                 </div>
+                {/* archived section */}
                 {colKey === 'done' && archived.length > 0 && (
                   <details className="archive">
                     <summary>Archivados ({archived.length})</summary>
