@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from 'react';
 
 const STORAGE_KEY = 'pipeline_incidencias_v1';
-const SLACK_WORKSPACE_FALLBACK = 'https://slack.com/app_redirect';
 
 // ============ HELPERS ============
 function loadState() {
@@ -58,8 +57,16 @@ function extractTitle(text) {
   return lines.length > 0 ? shortenText(lines[0], 90) : shortenText(cleaned, 90);
 }
 
-function buildSlackLink(channelId, ts) {
-  return `${SLACK_WORKSPACE_FALLBACK}?channel=${channelId}&message_ts=${ts}`;
+function buildSlackLink(channelId, ts, teamUrl) {
+  // Prefer direct workspace URL (opens thread correctly):
+  // https://{workspace}.slack.com/archives/{channel}/p{ts_no_dot}
+  if (teamUrl) {
+    const base = teamUrl.replace(/\/$/, '');
+    const tsNoDot = String(ts).replace('.', '');
+    return `${base}/archives/${channelId}/p${tsNoDot}`;
+  }
+  // Fallback (less reliable for threads):
+  return `https://slack.com/app_redirect?channel=${channelId}&message_ts=${ts}`;
 }
 
 // ============ MAIN COMPONENT ============
@@ -69,7 +76,7 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all');
-  const [config, setConfig] = useState({ myUserId: '', channels: [] });
+  const [config, setConfig] = useState({ myUserId: '', channels: [], team: null });
   const [progress, setProgress] = useState('');
 
   useEffect(() => { setState(loadState()); }, []);
@@ -98,20 +105,27 @@ export default function Page() {
 
       // Gather all user IDs to resolve names
       const userIdsToResolve = new Set();
-      msgsRes.channels.forEach(c => c.messages.forEach(m => { if (m.user) userIdsToResolve.add(m.user); }));
+      (msgsRes.channels || []).forEach(c => {
+        const msgs = Array.isArray(c.messages) ? c.messages : [];
+        msgs.forEach(m => { if (m && m.user) userIdsToResolve.add(m.user); });
+      });
 
       // Identify candidate threads (with replies, or for "mention" channel: any message mentioning me)
+      // API devuelve `channel` (no `id`).
       const threadFetches = [];
       for (const c of msgsRes.channels) {
-        for (const m of c.messages) {
-          const mentionsMe = myId && (m.text.includes(myId));
+        const channelId = c.channel || c.id;
+        const filter = c.filter || 'all';
+        const messages = Array.isArray(c.messages) ? c.messages : [];
+        for (const m of messages) {
+          const mentionsMe = myId && m.text && m.text.includes(myId);
           const isFromMe = m.user === myId;
-          if (c.filter === 'mention') {
+          if (filter === 'mention') {
             if (m.reply_count > 0 || mentionsMe || isFromMe) {
-              threadFetches.push({ channel: c.id, ts: m.ts, root: m, channelFilter: c.filter });
+              threadFetches.push({ channel: channelId, ts: m.ts, root: m, channelFilter: filter });
             }
           } else if (m.reply_count > 0) {
-            threadFetches.push({ channel: c.id, ts: m.ts, root: m, channelFilter: c.filter });
+            threadFetches.push({ channel: channelId, ts: m.ts, root: m, channelFilter: filter });
           }
         }
       }
@@ -191,7 +205,7 @@ export default function Page() {
             lastText: shortenText(lastText, 150),
             category: categorize(allText),
             waitingForMe,
-            link: buildSlackLink(f.channel, f.ts),
+            link: buildSlackLink(f.channel, f.ts, cfgRes?.team?.url),
             replyCount: replies.length,
           });
         } catch (err) {
