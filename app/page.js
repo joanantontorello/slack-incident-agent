@@ -421,13 +421,13 @@ export default function Page() {
     return () => window.removeEventListener('keydown', onKey);
   }, [modalCase, closeModal]);
 
-  const syncSlackDone = useCallback(async (c, undo = false) => {
+  const syncReaction = useCallback(async (c, { emoji, undo = false, markRead = false }) => {
     if (!c || !c.channelId || !c.ts) return;
     try {
-      const res = await fetch('/api/done', {
+      const res = await fetch('/api/react', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel: c.channelId, ts: c.ts, undo }),
+        body: JSON.stringify({ channel: c.channelId, ts: c.ts, emoji, undo, markRead }),
       });
       const data = await res.json().catch(() => ({}));
       const reaction = data.reaction;
@@ -435,10 +435,12 @@ export default function Page() {
       const as = data.reactionAs || '?';
       const reactionOK = reaction === 'ok' || reaction === 'noop';
       const markOK = mark === 'ok' || (mark && mark.startsWith('skipped'));
+      const verb = undo ? '↩ Reacción quitada' : '✅ Reacción puesta';
+      const emojiTxt = emoji ? `:${emoji}:` : '';
       if (reactionOK && markOK) {
-        showToast(undo ? `↩ Reacción quitada en Slack (como ${as})` : `✅ Marcado en Slack (como ${as})`, 'ok');
+        showToast(`${verb} ${emojiTxt} (como ${as})`, 'ok');
       } else {
-        const parts = [`as=${as}`];
+        const parts = [`as=${as}`, `emoji=${emoji}`];
         if (!reactionOK) parts.push(`reacción: ${reaction || 'sin respuesta'}`);
         if (!markOK)     parts.push(`mark: ${mark}`);
         showToast(`⚠️ Sync parcial → ${parts.join(' · ')}`, 'warn');
@@ -450,13 +452,24 @@ export default function Page() {
 
   const setCaseStatus = (caseId, status) => {
     const prev = state.cases[caseId] || {};
+    const prevStatus = prev.status || 'todo';
     const s = { ...state, cases: { ...state.cases, [caseId]: { ...prev, status, ...(status === 'done' ? { doneAt: Date.now() } : {}) } } };
     setState(s); saveState(s);
-    // Sync con Slack al pasar a/desde "done"
+
     const c = cases.find(x => x.id === caseId);
-    if (c) {
-      if (status === 'done' && prev.status !== 'done') syncSlackDone(c, false);
-      else if (status !== 'done' && prev.status === 'done') syncSlackDone(c, true);
+    if (!c) return;
+
+    // Reacciones por transición:
+    //   doing → 👀  (eyes)        done → ✅ (white_check_mark, + mark as read)
+    if (status === 'doing' && prevStatus !== 'doing') {
+      syncReaction(c, { emoji: 'eyes' });
+    } else if (prevStatus === 'doing' && status !== 'doing') {
+      syncReaction(c, { emoji: 'eyes', undo: true });
+    }
+    if (status === 'done' && prevStatus !== 'done') {
+      syncReaction(c, { emoji: 'white_check_mark', markRead: true });
+    } else if (prevStatus === 'done' && status !== 'done') {
+      syncReaction(c, { emoji: 'white_check_mark', undo: true });
     }
   };
 
