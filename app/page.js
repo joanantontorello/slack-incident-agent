@@ -222,12 +222,30 @@ export default function Page() {
   const [toast, setToast] = useState(null);
 
   // Inicialización del estado: intenta KV; si no, localStorage.
+  // Migración: si KV está vacío y localStorage tiene datos, los sube
+  // (one-shot — solo la primera vez que el KV esté vacío).
   useEffect(() => {
     (async () => {
       const s = await fetchServerState();
       if (s.enabled) {
         setSharedMode(true);
-        setState({ cases: s.cases || {} });
+        const serverCases = s.cases || {};
+        const localCases = (loadState().cases) || {};
+        const serverEmpty = Object.keys(serverCases).length === 0;
+        const localHasData = Object.keys(localCases).length > 0;
+        if (serverEmpty && localHasData) {
+          const patches = Object.entries(localCases).map(([caseId, patch]) => ({ caseId, patch }));
+          const res = await postPatches(patches);
+          if (res.enabled && res.cases) {
+            setState({ cases: res.cases });
+            setToast({ msg: `📤 Migrados ${patches.length} casos de tu estado local al compartido`, kind: 'ok', id: Date.now() });
+            setTimeout(() => setToast(null), 6000);
+          } else {
+            setState({ cases: serverCases });
+          }
+        } else {
+          setState({ cases: serverCases });
+        }
       } else {
         setSharedMode(false);
         setState(loadState());
