@@ -105,43 +105,64 @@ puestas por Joan Anton (no las de otros).
 
 ## Casos de uso
 
-> Esta sección la rellenamos a medida que vayan apareciendo casos
-> reales. Pásame por chat el tipo de incidencia y qué hay que hacer,
-> y lo voy añadiendo aquí estructurado.
-
-### 🔴 Acceso
-
-**Cuándo aplica:** hilos sobre quitar/pausar/revocar accesos,
-darse de baja del programa, cuota atrasada.
-
-#### Caso: _[pendiente de rellenar]_
-- Síntoma típico:
-- Pasos a seguir:
-- Quién aprueba / a quién avisar:
-
----
-
 ### 💰 Reembolso
 
 **Cuándo aplica:** hilos sobre reembolsos, devoluciones, cobros
 incorrectos, dobles cargos.
 
-#### Caso: _[pendiente de rellenar]_
-- Síntoma típico:
-- Pasos a seguir:
-- Quién aprueba / a quién avisar:
+#### Caso único — Cualquier solicitud de reembolso
+1. Etiquetar a **Sílvia** en el hilo (ella lo gestiona end-to-end).
+2. Mover la tarjeta a **En progreso** en el dashboard
+   (automáticamente añade 👀 al hilo).
+
+---
+
+### 🔴 Acceso (cuota atrasada / impago)
+
+**Cuándo aplica:** hilos sobre quitar/pausar/revocar accesos, darse
+de baja, o cualquier mención a "cuota atrasada" / "impago".
+
+#### Caso A — Cliente pide que **no le pausemos accesos**
+1. Marcar el checkbox **"No es Impago"** en el CRM (Airtable).
+2. Programar un **follow up en X días** etiquetando al closer para
+   preguntar en qué estado está.
+3. Mover la tarjeta a **En progreso**.
+
+#### Caso B — Cliente dice que **ya ha pagado**
+1. Revisar en **Airtable** que el pago esté registrado.
+2. **Si el pago está registrado en Airtable:**
+   - Verificar que el cliente ya NO aparece en la lista de cuotas
+     atrasadas.
+   - **Si sigue apareciendo** → marcar **"No es impago"** + mover
+     tarjeta a **Hecho**.
+   - **Si ya no aparece** → mover tarjeta directamente a **Hecho**.
+3. **Si el pago NO está registrado en Airtable:**
+   - Mensajear al closer en el hilo:
+     > `@closer no veo el pago registrado en airtable, ¿puedes
+     > registrarlo por favor?`
+   - Mover tarjeta a **En progreso**.
+
+#### Caso C — Cliente dice que **está gestionando el pago**
+1. Programar un mensaje de **follow up a los 3-4 días**.
+2. Mover tarjeta a **En progreso**.
 
 ---
 
 ### 📌 Otro
 
-**Cuándo aplica:** todo lo demás. Aquí caen las preguntas del equipo
-sobre el CRM, dudas operativas, etc.
+**Cuándo aplica:** todo lo demás. Preguntas del equipo sobre el CRM,
+dudas operativas, configuración, etc.
 
-#### Caso: _[pendiente de rellenar]_
-- Síntoma típico:
-- Pasos a seguir:
-- Quién aprueba / a quién avisar:
+> Sin protocolo fijo todavía. Si aparece algún caso recurrente que
+> requiera pasos estandarizados, lo añadimos aquí.
+
+---
+
+## Recordatorio operativo
+
+🔁 **Revisar las tarjetas en "En progreso" cada 2-3 días** para
+asegurarse de que no se quedan paradas (follow up al cliente, al
+closer, o cerrar si ya está resuelto).
 
 ---
 
