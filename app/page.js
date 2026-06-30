@@ -666,6 +666,8 @@ export default function Page() {
         .filter-row button { background: #fff; border: 1px solid #d1d5db; border-radius: 14px; padding: 3px 10px; font-size: 11px; cursor: pointer; color: #444; }
         .filter-row button.active { background: #111; color: white; border-color: #111; }
         .filter-row button .count { color: inherit; opacity: 0.7; margin-left: 4px; font-size: 10px; }
+        .manual-link { background: #fff; border: 1px solid #d1d5db; color: #374151; padding: 5px 10px; border-radius: 6px; font-size: 12px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+        .manual-link:hover { background: #f3f4f6; color: #111; }
         .refresh-btn { background: #4f46e5; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; }
         .refresh-btn:disabled { opacity: 0.5; cursor: wait; }
         .board { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; padding: 12px; min-height: calc(100vh - 60px); }
@@ -762,6 +764,7 @@ export default function Page() {
               {channelLabel(c.id)}
             </button>
           ))}
+          <a className="manual-link" href="https://github.com/joanantontorello/slack-incident-agent/blob/main/MANUAL.md" target="_blank" rel="noopener noreferrer" title="Abrir manual de uso en GitHub">📖 Manual</a>
           <button className="refresh-btn" onClick={loadAll} disabled={loading}>↻ {loading ? 'Cargando…' : 'Refrescar'}</button>
         </div>
       </div>
