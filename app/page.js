@@ -138,6 +138,27 @@ function extractTitle(text, users) {
   return lines.length > 0 ? shortenText(lines[0], 90, users) : shortenText(cleaned, 90, users);
 }
 
+// Detecta si el input es un link de Slack (https://… o slack://) y
+// devuelve {channelId, ts} si lo es, o null si no.
+function parseSlackUrl(input) {
+  if (!input) return null;
+  const s = String(input).trim();
+  // HTTPS form: …/archives/CHANNEL/pTS o con ?thread_ts=… (gana thread_ts)
+  const httpsMatch = s.match(/\/archives\/([A-Z0-9]+)\/p(\d+)/);
+  if (httpsMatch) {
+    const channelId = httpsMatch[1];
+    const tsNoDot = httpsMatch[2];
+    const tt = s.match(/thread_ts=([0-9.]+)/);
+    if (tt) return { channelId, ts: tt[1] };
+    const ts = tsNoDot.length > 6 ? `${tsNoDot.slice(0, -6)}.${tsNoDot.slice(-6)}` : tsNoDot;
+    return { channelId, ts };
+  }
+  // slack:// form
+  const deep = s.match(/slack:\/\/[^?]*\?[^#]*id=([A-Z0-9]+)[^#]*message=([\d.]+)/);
+  if (deep) return { channelId: deep[1], ts: deep[2] };
+  return null;
+}
+
 function buildSlackLink(channelId, ts, teamUrl) {
   // Prefer direct workspace URL (opens thread correctly):
   // https://{workspace}.slack.com/archives/{channel}/p{ts_no_dot}
@@ -213,6 +234,7 @@ export default function Page() {
   const [error, setError] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all');
   const [activeCategory, setActiveCategory] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [config, setConfig] = useState({ myUserId: '', channels: [], team: null });
   const [progress, setProgress] = useState('');
   const [modalCase, setModalCase] = useState(null);
@@ -583,9 +605,23 @@ export default function Page() {
   };
 
   // Filter and bucket
+  const trimmedQuery = searchQuery.trim();
+  const parsedUrl = trimmedQuery ? parseSlackUrl(trimmedQuery) : null;
+  const textQuery = !parsedUrl && trimmedQuery ? trimmedQuery.toLowerCase() : '';
+  const matchesSearch = (c) => {
+    if (!trimmedQuery) return true;
+    if (parsedUrl) return c.channelId === parsedUrl.channelId && String(c.ts) === String(parsedUrl.ts);
+    return (
+      (c.title && c.title.toLowerCase().includes(textQuery)) ||
+      (c.summary && c.summary.toLowerCase().includes(textQuery)) ||
+      (c.lastText && c.lastText.toLowerCase().includes(textQuery)) ||
+      (c.lastUser && c.lastUser.toLowerCase().includes(textQuery))
+    );
+  };
   const filtered = cases.filter(c =>
     (activeFilter === 'all' || c.channelId === activeFilter) &&
-    (activeCategory === 'all' || c.category.key === activeCategory)
+    (activeCategory === 'all' || c.category.key === activeCategory) &&
+    matchesSearch(c)
   );
   const categoryCounts = cases
     .filter(c => activeFilter === 'all' || c.channelId === activeFilter)
@@ -619,6 +655,12 @@ export default function Page() {
         .channel-filter { display: flex; gap: 6px; flex-wrap: wrap; }
         .channel-filter button { background: #fff; border: 1px solid #d1d5db; border-radius: 14px; padding: 3px 10px; font-size: 11px; cursor: pointer; color: #444; }
         .channel-filter button.active { background: #4f46e5; color: white; border-color: #4f46e5; }
+        .search-box { display: flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #d1d5db; border-radius: 14px; padding: 3px 10px; min-width: 240px; flex: 1; max-width: 520px; }
+        .search-box input { border: none; outline: none; background: transparent; flex: 1; font-size: 12px; color: #111; padding: 2px 0; }
+        .search-box .clear { background: none; border: none; cursor: pointer; color: #9ca3af; font-size: 14px; padding: 0; }
+        .search-box .clear:hover { color: #111; }
+        .search-status { font-size: 11px; color: #6b7280; padding: 4px 12px; background: #f1f3f7; border-bottom: 1px solid #e5e7eb; }
+        .search-status .miss { color: #b91c1c; font-weight: 500; }
         .filter-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 16px; background: #fff; border-bottom: 1px solid #e5e7eb; }
         .filter-row .label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600; }
         .filter-row button { background: #fff; border: 1px solid #d1d5db; border-radius: 14px; padding: 3px 10px; font-size: 11px; cursor: pointer; color: #444; }
@@ -723,6 +765,32 @@ export default function Page() {
           <button className="refresh-btn" onClick={loadAll} disabled={loading}>↻ {loading ? 'Cargando…' : 'Refrescar'}</button>
         </div>
       </div>
+
+      <div className="filter-row">
+        <div className="search-box">
+          <span style={{ color: '#9ca3af', fontSize: '12px' }}>🔍</span>
+          <input
+            type="text"
+            placeholder="Pega un link de Slack o busca por texto…"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button className="clear" onClick={() => setSearchQuery('')} aria-label="Limpiar">×</button>
+          )}
+        </div>
+      </div>
+      {trimmedQuery && (
+        <div className="search-status">
+          {parsedUrl ? (
+            filtered.length > 0
+              ? <>🔗 Link Slack → encontrado en <b>{channelLabel(parsedUrl.channelId)}</b></>
+              : <span className="miss">🔗 Link Slack → <b>no encontrado</b> en el pipeline (puede estar fuera de los últimos 14 días o en un canal no monitorizado)</span>
+          ) : (
+            <>🔎 Filtrando por <b>"{trimmedQuery}"</b> → {filtered.length} {filtered.length === 1 ? 'resultado' : 'resultados'}</>
+          )}
+        </div>
+      )}
 
       <div className="filter-row">
         <span className="label">Categoría:</span>
