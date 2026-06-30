@@ -526,7 +526,9 @@ export default function Page() {
       const mark = data.mark;
       const as = data.reactionAs || '?';
       const reactionOK = reaction === 'ok' || reaction === 'noop';
-      const markOK = mark === 'ok' || (mark && mark.startsWith('skipped'));
+      // mark === null cuando no se pidió mark-as-read (transiciones que
+      // no son a "done"); en ese caso no es un fallo.
+      const markOK = mark == null || mark === 'ok' || (typeof mark === 'string' && mark.startsWith('skipped'));
       const verb = undo ? '↩ Reacción quitada' : '✅ Reacción puesta';
       const emojiTxt = emoji ? `:${emoji}:` : '';
       if (reactionOK && markOK) {
