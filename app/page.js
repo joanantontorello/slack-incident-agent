@@ -44,6 +44,33 @@ const EMOJI_MAP = {
 };
 
 // ============ HELPERS ============
+// ============ STATE PERSISTENCE ============
+// Si KV está habilitado en el servidor → state compartido vía /api/state
+// (polling cada 15s). Si no → fallback a localStorage local.
+async function fetchServerState() {
+  try {
+    const r = await fetch('/api/state', { cache: 'no-store' });
+    const data = await r.json();
+    return data; // { enabled, cases }
+  } catch (e) {
+    return { enabled: false, cases: {}, error: String(e.message || e) };
+  }
+}
+
+async function postPatches(patches) {
+  try {
+    const r = await fetch('/api/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ patches }),
+      cache: 'no-store',
+    });
+    return r.json(); // { enabled, cases }
+  } catch (e) {
+    return { enabled: false, cases: null, error: String(e.message || e) };
+  }
+}
+
 function loadState() {
   if (typeof window === 'undefined') return { cases: {} };
   try {
@@ -181,6 +208,7 @@ function formatTs(ts) {
 export default function Page() {
   const [cases, setCases] = useState([]);
   const [state, setState] = useState({ cases: {} });
+  const [sharedMode, setSharedMode] = useState(false); // true si KV está habilitado
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all');
@@ -193,7 +221,35 @@ export default function Page() {
   const [modalLoading, setModalLoading] = useState(false);
   const [toast, setToast] = useState(null);
 
-  useEffect(() => { setState(loadState()); }, []);
+  // Inicialización del estado: intenta KV; si no, localStorage.
+  useEffect(() => {
+    (async () => {
+      const s = await fetchServerState();
+      if (s.enabled) {
+        setSharedMode(true);
+        setState({ cases: s.cases || {} });
+      } else {
+        setSharedMode(false);
+        setState(loadState());
+      }
+    })();
+  }, []);
+
+  // Polling de state compartido cada 15s (solo si KV activo y pestaña visible).
+  useEffect(() => {
+    if (!sharedMode) return;
+    let cancelled = false;
+    const tick = async () => {
+      if (document.hidden) return;
+      const s = await fetchServerState();
+      if (cancelled) return;
+      if (s.enabled) setState({ cases: s.cases || {} });
+    };
+    const id = setInterval(tick, 15000);
+    const onVis = () => { if (!document.hidden) tick(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { cancelled = true; clearInterval(id); document.removeEventListener('visibilitychange', onVis); };
+  }, [sharedMode]);
 
   const channelLabel = useCallback((id) => {
     const map = {
@@ -209,6 +265,26 @@ export default function Page() {
     setToast({ msg, kind, id: Date.now() });
     setTimeout(() => setToast(t => (t && Date.now() - t.id >= 4500) ? null : t), 5000);
   }, []);
+
+  // Persiste un lote de patches. Actualiza state local (optimista) y
+  // envía a KV; si KV no está, guarda en localStorage.
+  const persistPatches = useCallback(async (patches) => {
+    setState(prev => {
+      const cases = { ...prev.cases };
+      for (const { caseId, patch } of patches) {
+        if (!caseId || !patch) continue;
+        cases[caseId] = { ...(cases[caseId] || {}), ...patch };
+      }
+      const next = { ...prev, cases };
+      if (!sharedMode) saveState(next);
+      return next;
+    });
+    if (sharedMode) {
+      const res = await postPatches(patches);
+      if (res.enabled && res.cases) setState({ cases: res.cases });
+      else if (res.error) showToast(`⚠️ Sync state falló: ${res.error}`, 'warn');
+    }
+  }, [sharedMode, showToast]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -354,23 +430,21 @@ export default function Page() {
 
       setCases(allCases);
 
-      // Auto-promoción a "done" en localStorage para todos los hilos en los
-      // que Joan ya reaccionó con ✅ en Slack (única fuente de verdad).
-      const current = loadState();
-      const nextCases = { ...current.cases };
-      let promoted = 0;
+      // Auto-promoción a "done" para hilos donde Joan ya reaccionó con ✅
+      // en Slack (única fuente de verdad). Se aplica sobre el state actual
+      // (KV si está, localStorage si no).
+      const baseCases = (sharedMode ? state.cases : (loadState().cases || {}));
+      const patches = [];
       for (const c of allCases) {
         if (!c.checkedByMe) continue;
-        const prev = nextCases[c.id] || {};
+        const prev = baseCases[c.id] || {};
         if (prev.status !== 'done') {
-          nextCases[c.id] = { ...prev, status: 'done', doneAt: prev.doneAt || Date.now(), autoFromSlack: true };
-          promoted++;
+          patches.push({ caseId: c.id, patch: { status: 'done', doneAt: prev.doneAt || Date.now(), autoFromSlack: true } });
         }
       }
-      if (promoted > 0) {
-        const ns = { ...current, cases: nextCases };
-        setState(ns); saveState(ns);
-        showToast(`✅ ${promoted} ${promoted === 1 ? 'hilo movido' : 'hilos movidos'} a Hecho (reacción ✅ en Slack)`, 'ok');
+      if (patches.length > 0) {
+        persistPatches(patches);
+        showToast(`✅ ${patches.length} ${patches.length === 1 ? 'hilo movido' : 'hilos movidos'} a Hecho (reacción ✅ en Slack)`, 'ok');
       }
 
       setLoading(false);
@@ -453,8 +527,8 @@ export default function Page() {
   const setCaseStatus = (caseId, status) => {
     const prev = state.cases[caseId] || {};
     const prevStatus = prev.status || 'todo';
-    const s = { ...state, cases: { ...state.cases, [caseId]: { ...prev, status, ...(status === 'done' ? { doneAt: Date.now() } : {}) } } };
-    setState(s); saveState(s);
+    const patch = { status, ...(status === 'done' ? { doneAt: Date.now() } : {}) };
+    persistPatches([{ caseId, patch }]);
 
     const c = cases.find(x => x.id === caseId);
     if (!c) return;
@@ -479,20 +553,13 @@ export default function Page() {
       .map(c => c.id);
     if (doneIds.length === 0) return;
     if (!confirm(`¿Archivar ${doneIds.length} ${doneIds.length === 1 ? 'tarjeta' : 'tarjetas'} de Hecho?`)) return;
-    const next = { ...state.cases };
-    for (const id of doneIds) {
-      next[id] = { ...(next[id] || {}), archived: true };
-    }
-    const s = { ...state, cases: next };
-    setState(s); saveState(s);
+    persistPatches(doneIds.map(caseId => ({ caseId, patch: { archived: true } })));
   };
   const archiveCase = (caseId) => {
-    const s = { ...state, cases: { ...state.cases, [caseId]: { ...(state.cases[caseId] || {}), archived: true } } };
-    setState(s); saveState(s);
+    persistPatches([{ caseId, patch: { archived: true } }]);
   };
   const restoreCase = (caseId) => {
-    const s = { ...state, cases: { ...state.cases, [caseId]: { ...(state.cases[caseId] || {}), archived: false, status: 'todo' } } };
-    setState(s); saveState(s);
+    persistPatches([{ caseId, patch: { archived: false, status: 'todo' } }]);
   };
 
   // Filter and bucket
@@ -621,6 +688,9 @@ export default function Page() {
             <span>⏳ <b>{waitingCount}</b> esperan respuesta</span>
             <span>🔄 <b>{buckets.doing.length}</b> en progreso</span>
             <span>✅ <b>{buckets.done.length}</b> hechos</span>
+            <span title={sharedMode ? 'Estado compartido entre todos los usuarios (Vercel KV, polling 15s)' : 'Estado solo en este navegador (KV no configurado)'}>
+              {sharedMode ? '🌐 compartido' : '💻 local'}
+            </span>
           </div>
         </div>
         <div className="channel-filter">
