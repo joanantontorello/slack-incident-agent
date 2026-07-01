@@ -1,9 +1,6 @@
 export const metadata = { title: 'Manual — Pipeline Incidencias' };
 
-export default function ManualPage() {
-  return (
-    <>
-      <style>{`
+const STYLES = `
         :root { color-scheme: light; }
         * { box-sizing: border-box; }
         html, body { margin: 0; padding: 0; }
@@ -90,7 +87,12 @@ export default function ManualPage() {
           font-size: 12px; color: #94a3b8; text-align: center;
         }
         .footer-note a { color: #64748b; }
-      `}</style>
+`;
+
+export default function ManualPage() {
+  return (
+    <>
+      <style dangerouslySetInnerHTML={{ __html: STYLES }} />
 
       <div className="top">
         <span className="brand">📋 Pipeline Incidencias — Manual</span>
