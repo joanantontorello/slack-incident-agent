@@ -764,7 +764,7 @@ export default function Page() {
               {channelLabel(c.id)}
             </button>
           ))}
-          <a className="manual-link" href="https://github.com/joanantontorello/slack-incident-agent/blob/main/MANUAL.md" target="_blank" rel="noopener noreferrer" title="Abrir manual de uso en GitHub">📖 Manual</a>
+          <a className="manual-link" href="/manual" target="_blank" rel="noopener noreferrer" title="Abrir manual de uso">📖 Manual</a>
           <button className="refresh-btn" onClick={loadAll} disabled={loading}>↻ {loading ? 'Cargando…' : 'Refrescar'}</button>
         </div>
       </div>
