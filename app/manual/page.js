@@ -257,6 +257,36 @@ export default function ManualPage() {
           </ol>
         </div>
 
+        <div className="step acceso">
+          <h4>Caso D — Hay que devolverle accesos a alguien que ya ha pagado</h4>
+          <ol>
+            <li>Comprobar que efectivamente ha pagado:
+              <br />→ <code>Airtable</code> · <code>Contabilidad</code> · mirar el registro de pagos.
+            </li>
+            <li><b>Si SÍ ha pagado</b>, devolverle accesos:
+              <br />→ <code>Airtable</code> · <code>Leads</code> · vista <b>"Cuotas atrasadas"</b>.
+              <ul>
+                <li>Si está activado <b>"Pausa por impago manual"</b> → desactivarlo.</li>
+                <li>Si está activado <b>"Es impago manual"</b> → desactivarlo.</li>
+                <li>Si está activado <b>"Alumno Pausado"</b> → desactivarlo, esperar 1-2 min, y verificar en <b>Circle</b> que vuelve a tener accesos.</li>
+                <li>Si <b>ninguno</b> de los tres flags (Es impago manual / Pausa por impago manual / Alumno Pausado) está activo → verificar directamente en <b>Circle</b> si tiene accesos:
+                  <ul>
+                    <li><b>Sí tiene accesos</b> → verificar que en el pipeline de <b>"Alumnos ICO"</b> está como <b>"Activo y en progreso"</b>. Si no, ponerlo así.</li>
+                    <li><b>No tiene accesos</b> → darle accesos manuales, esperar 1-2 min, verificar en Circle que vuelve a tener accesos.</li>
+                  </ul>
+                </li>
+                <li><b>Si tras 2 min en Circle no se ha actualizado</b>, hacer manualmente:
+                  <ul>
+                    <li>Quitar etiqueta <code>Estado_Pausado</code>.</li>
+                    <li>Poner etiqueta <code>Estado_Activo</code>.</li>
+                  </ul>
+                </li>
+              </ul>
+            </li>
+            <li>Mover la tarjeta a <b>Hecho</b> (o marcar ✅ directamente en el hilo de Slack).</li>
+          </ol>
+        </div>
+
         <h3><span className="badge badge-otro">📌 Otro</span></h3>
         <p><i>Preguntas del equipo sobre el CRM, dudas operativas, configuración, etc.</i></p>
         <p>
