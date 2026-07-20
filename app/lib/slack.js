@@ -40,3 +40,14 @@ export function getChannelsConfig() {
 export function getMyUserId() {
   return process.env.MY_USER_ID || '';
 }
+
+// Lista de user IDs cuyas reacciones ✅ en Slack auto-mueven el hilo
+// a "Hecho" en el dashboard. Formato env: "U08N1C4B9PC,U0B102S2N6Q".
+// Si no está seteado, fallback a solo MY_USER_ID.
+export function getAutoDoneUserIds() {
+  const raw = process.env.AUTO_DONE_USER_IDS || '';
+  const ids = raw.split(',').map(s => s.trim()).filter(Boolean);
+  if (ids.length > 0) return ids;
+  const me = getMyUserId();
+  return me ? [me] : [];
+}

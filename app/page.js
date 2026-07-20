@@ -442,10 +442,15 @@ export default function Page() {
             return allText.includes(myId);
           })();
 
-          // ¿Joan reaccionó con ✅ al mensaje raíz? → considerar Hecho.
+          // ¿Alguno de los usuarios "responsables" (Joan, Lautaro, …)
+          // reaccionó con ✅ al mensaje raíz? → considerar Hecho.
+          const autoDoneIds = Array.isArray(cfgRes.autoDoneUserIds) && cfgRes.autoDoneUserIds.length > 0
+            ? cfgRes.autoDoneUserIds
+            : (myId ? [myId] : []);
           const rootReactions = Array.isArray(root.reactions) ? root.reactions : [];
-          const checkedByMe = myId && rootReactions.some(r =>
-            r && r.name === 'white_check_mark' && Array.isArray(r.users) && r.users.includes(myId)
+          const checkedByMe = autoDoneIds.length > 0 && rootReactions.some(r =>
+            r && r.name === 'white_check_mark' && Array.isArray(r.users) &&
+            r.users.some(u => autoDoneIds.includes(u))
           );
 
           allCases.push({

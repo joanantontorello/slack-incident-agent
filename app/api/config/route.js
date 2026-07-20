@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getChannelsConfig, getMyUserId, slackFetch } from '../../lib/slack';
+import { getChannelsConfig, getMyUserId, getAutoDoneUserIds, slackFetch } from '../../lib/slack';
 
 export const runtime = 'nodejs';
 
@@ -25,6 +25,7 @@ export async function GET() {
   const team = await getTeam();
   return NextResponse.json({
     myUserId: getMyUserId(),
+    autoDoneUserIds: getAutoDoneUserIds(),
     channels: getChannelsConfig(),
     team,
   });
