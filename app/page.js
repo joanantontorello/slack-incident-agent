@@ -235,6 +235,7 @@ export default function Page() {
   const [activeFilter, setActiveFilter] = useState('all');
   const [activeCategory, setActiveCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [onlyWaiting, setOnlyWaiting] = useState(false);
   const [config, setConfig] = useState({ myUserId: '', channels: [], team: null });
   const [progress, setProgress] = useState('');
   const [modalCase, setModalCase] = useState(null);
@@ -626,6 +627,7 @@ export default function Page() {
   const filtered = cases.filter(c =>
     (activeFilter === 'all' || c.channelId === activeFilter) &&
     (activeCategory === 'all' || c.category.key === activeCategory) &&
+    (!onlyWaiting || c.waitingForMe) &&
     matchesSearch(c)
   );
   const categoryCounts = cases
@@ -801,6 +803,15 @@ export default function Page() {
       )}
 
       <div className="filter-row">
+        <button
+          className={onlyWaiting ? 'active' : ''}
+          onClick={() => setOnlyWaiting(v => !v)}
+          title="Mostrar solo hilos donde se espera respuesta tuya"
+          style={{ background: onlyWaiting ? '#b45309' : '#fff', color: onlyWaiting ? '#fff' : '#b45309', borderColor: '#f59e0b', fontWeight: 600 }}
+        >
+          ⏳ Solo espera mi respuesta{onlyWaiting ? ' ✓' : ''} ({cases.filter(c => c.waitingForMe).length})
+        </button>
+        <span style={{ width: 12 }} />
         <span className="label">Categoría:</span>
         {[
           { key: 'all', label: 'Todas', cls: '' },
