@@ -41,6 +41,13 @@ const EMOJI_MAP = {
   package: '📦', gift: '🎁', shopping_cart: '🛒', truck: '🚚',
   trophy: '🏆', medal: '🏅', '100': '💯', first_place_medal: '🥇',
   hand: '✋', wave_tone: '👋', skin: '👌',
+  recycle: '♻️', repeat: '🔁', repeat_one: '🔂', refresh: '🔄',
+  new: '🆕', ok: '🆗', top: '🔝', up: '🆙', cool: '🆒', free: '🆓',
+  bangbang: '‼️', interrobang: '⁉️', v: '✌️', crossed_fingers: '🤞',
+  writing_hand_tone: '✍️', memo_pad: '📝', ledger: '📒', notebook_with_decorative_cover: '📔',
+  card_index: '📇', card_file_box: '🗃️', file_folder: '📁', open_file_folder: '📂',
+  bookmark_tabs: '📑', spiral_notepad: '🗒️', dart: '🎯', chart: '💹', money_mouth_face: '🤑',
+  green_apple: '🍏', apple: '🍎', hearts: '♥️', spades: '♠️', diamonds: '♦️', clubs: '♣️',
 };
 
 // ============ HELPERS ============
@@ -133,9 +140,14 @@ function shortenText(s, n, users) {
 }
 
 function extractTitle(text, users) {
-  const cleaned = shortenText(text, 200, users);
-  const lines = cleaned.split(/\n|—|\*/).filter(l => l.trim().length > 3);
-  return lines.length > 0 ? shortenText(lines[0], 90, users) : shortenText(cleaned, 90, users);
+  const cleaned = shortenText(text, 400, users);
+  // Prefer email si aparece — es lo que Joan usa para identificar el caso.
+  const emailMatch = cleaned.match(/[a-zA-Z0-9._+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  if (emailMatch) return emailMatch[0];
+  // Si no, frase corta de la primera línea significativa.
+  const lines = cleaned.split(/\n|—|\*|\.\s|:/).map(l => l.trim()).filter(l => l.length > 3);
+  const first = lines[0] || cleaned;
+  return shortenText(first, 60, users);
 }
 
 // Detecta si el input es un link de Slack (https://… o slack://) y
@@ -652,79 +664,119 @@ export default function Page() {
   return (
     <>
       <style jsx global>{`
-        :root { color-scheme: light; }
+        :root { color-scheme: light; --brand: #0068FF; --brand-dark: #0052cc; --bg: #f5f7fb; --ink: #0f172a; --muted: #64748b; --border: #e2e8f0; }
         * { box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; margin: 0; background: #f8f9fb; color: #1a1a1a; font-size: 13px; line-height: 1.4; }
-        .header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #fff; border-bottom: 1px solid #e5e7eb; position: sticky; top: 0; z-index: 10; gap: 12px; flex-wrap: wrap; }
-        .header h1 { margin: 0; font-size: 15px; font-weight: 600; }
-        .header .stats { display: flex; gap: 14px; font-size: 12px; color: #555; flex-wrap: wrap; }
-        .header .stats b { color: #111; font-weight: 600; }
-        .channel-filter { display: flex; gap: 6px; flex-wrap: wrap; }
-        .channel-filter button { background: #fff; border: 1px solid #d1d5db; border-radius: 14px; padding: 3px 10px; font-size: 11px; cursor: pointer; color: #444; }
-        .channel-filter button.active { background: #4f46e5; color: white; border-color: #4f46e5; }
-        .search-box { display: flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #d1d5db; border-radius: 14px; padding: 3px 10px; min-width: 240px; flex: 1; max-width: 520px; }
-        .search-box input { border: none; outline: none; background: transparent; flex: 1; font-size: 12px; color: #111; padding: 2px 0; }
-        .search-box .clear { background: none; border: none; cursor: pointer; color: #9ca3af; font-size: 14px; padding: 0; }
-        .search-box .clear:hover { color: #111; }
-        .search-status { font-size: 11px; color: #6b7280; padding: 4px 12px; background: #f1f3f7; border-bottom: 1px solid #e5e7eb; }
-        .search-status .miss { color: #b91c1c; font-weight: 500; }
-        .filter-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 16px; background: #fff; border-bottom: 1px solid #e5e7eb; }
-        .filter-row .label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600; }
-        .filter-row button { background: #fff; border: 1px solid #d1d5db; border-radius: 14px; padding: 3px 10px; font-size: 11px; cursor: pointer; color: #444; }
-        .filter-row button.active { background: #111; color: white; border-color: #111; }
-        .filter-row button .count { color: inherit; opacity: 0.7; margin-left: 4px; font-size: 10px; }
-        .manual-link { background: #fff; border: 1px solid #d1d5db; color: #374151; padding: 5px 10px; border-radius: 6px; font-size: 12px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
-        .manual-link:hover { background: #f3f4f6; color: #111; }
-        .refresh-btn { background: #4f46e5; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif; margin: 0; background: var(--bg); color: var(--ink); font-size: 13px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+
+        /* HEADER */
+        .header { display: flex; align-items: center; justify-content: space-between; padding: 14px 22px; background: #fff; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; gap: 14px; flex-wrap: wrap; }
+        .brand { display: flex; align-items: center; gap: 12px; }
+        .brand-logo { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; letter-spacing: 0.5px; box-shadow: 0 2px 6px rgba(0,104,255,0.25); }
+        .brand h1 { margin: 0; font-size: 15px; font-weight: 600; color: var(--ink); letter-spacing: -0.2px; }
+        .brand .subtitle { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+        .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+        /* PILL TOGGLE GROUP (channel filter) */
+        .pill-group { display: inline-flex; background: #eef2f7; border-radius: 999px; padding: 3px; gap: 2px; }
+        .pill-group button { background: transparent; border: none; padding: 5px 14px; border-radius: 999px; font-size: 12px; color: var(--muted); cursor: pointer; font-weight: 500; transition: all 0.15s; }
+        .pill-group button:hover { color: var(--ink); }
+        .pill-group button.active { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(15,23,42,0.08); font-weight: 600; }
+
+        /* HEADER BUTTONS */
+        .icon-btn { background: #fff; border: 1px solid var(--border); color: var(--ink); padding: 6px 12px; border-radius: 8px; font-size: 12px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; transition: all 0.15s; }
+        .icon-btn:hover { border-color: #cbd5e1; background: #f8fafc; }
+        .refresh-btn { background: var(--brand); color: #fff; border: none; padding: 7px 14px; border-radius: 8px; font-size: 12px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(0,104,255,0.25); }
+        .refresh-btn:hover { background: var(--brand-dark); }
         .refresh-btn:disabled { opacity: 0.5; cursor: wait; }
-        .board { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; padding: 12px; min-height: calc(100vh - 60px); }
-        @media (max-width: 800px) { .board { grid-template-columns: 1fr; } }
-        .col { border-radius: 10px; padding: 8px; display: flex; flex-direction: column; min-width: 0; border: 1px solid transparent; }
-        .col[data-col="todo"]  { background: linear-gradient(180deg, #fee2e2 0%, #fef2f2 35%, #f5f6f9 100%); border-color: #fecaca; }
-        .col[data-col="doing"] { background: linear-gradient(180deg, #fef3c7 0%, #fffbeb 35%, #f5f6f9 100%); border-color: #fde68a; }
-        .col[data-col="done"]  { background: linear-gradient(180deg, #d1fae5 0%, #f0fdf4 35%, #f5f6f9 100%); border-color: #a7f3d0; }
-        .col-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 8px; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; }
-        .col-header .count { background: rgba(255,255,255,0.85); border-radius: 10px; padding: 1px 8px; font-size: 11px; color: #555; }
-        .col-header .col-actions { display: flex; gap: 6px; align-items: center; }
-        .col-header .archive-all { background: rgba(255,255,255,0.85); border: 1px solid #a7f3d0; color: #065f46; font-size: 10px; padding: 2px 8px; border-radius: 10px; cursor: pointer; text-transform: none; letter-spacing: 0; font-weight: 500; }
-        .col-header .archive-all:hover { background: #fff; }
-        .col-header .archive-all:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* SEARCH */
+        .search-box { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 6px 12px; flex: 1; max-width: 460px; transition: border-color 0.15s; }
+        .search-box:focus-within { border-color: var(--brand); }
+        .search-box input { border: none; outline: none; background: transparent; flex: 1; font-size: 13px; color: var(--ink); padding: 2px 0; }
+        .search-box input::placeholder { color: #94a3b8; }
+        .search-box .clear { background: none; border: none; cursor: pointer; color: #94a3b8; font-size: 16px; padding: 0; }
+        .search-box .clear:hover { color: var(--ink); }
+        .search-status { font-size: 12px; color: var(--muted); padding: 6px 22px; background: #eef2f7; border-bottom: 1px solid var(--border); }
+        .search-status .miss { color: #b91c1c; font-weight: 500; }
+
+        /* FILTER ROW */
+        .filter-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px 22px; background: #fff; border-bottom: 1px solid var(--border); }
+        .filter-row .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+        .filter-row .cat-btn { background: #fff; border: 1px solid var(--border); border-radius: 999px; padding: 5px 13px; font-size: 12px; cursor: pointer; color: var(--ink); font-weight: 500; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s; }
+        .filter-row .cat-btn:hover { border-color: #cbd5e1; }
+        .filter-row .cat-btn.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+        .filter-row .cat-btn .count { opacity: 0.6; font-size: 11px; }
+        .waiting-toggle { background: #fff; border: 1px solid #fbbf24; color: #b45309; padding: 5px 13px; border-radius: 999px; font-size: 12px; cursor: pointer; font-weight: 600; transition: all 0.15s; }
+        .waiting-toggle:hover { background: #fffbeb; }
+        .waiting-toggle.active { background: #f59e0b; color: #fff; border-color: #f59e0b; }
+        .cat-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
+
+        /* BOARD */
+        .board { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; padding: 18px 22px; min-height: calc(100vh - 130px); }
+        @media (max-width: 900px) { .board { grid-template-columns: 1fr; } }
+        .col { background: #fff; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(15,23,42,0.03); }
+        .col-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 12px; font-weight: 600; font-size: 12px; letter-spacing: 0.3px; text-transform: uppercase; }
+        .col-header .col-title { display: inline-flex; align-items: center; gap: 8px; }
+        .col-header .col-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .col[data-col="todo"]  .col-dot { background: #ef4444; }
+        .col[data-col="doing"] .col-dot { background: #f59e0b; }
+        .col[data-col="done"]  .col-dot { background: #10b981; }
         .col[data-col="todo"]  .col-header { color: #b91c1c; }
-        .col[data-col="doing"] .col-header { color: #a16207; }
-        .col[data-col="done"]  .col-header { color: #15803d; }
-        .cards { display: flex; flex-direction: column; gap: 6px; }
-        .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; box-shadow: 0 1px 1px rgba(0,0,0,0.03); cursor: pointer; transition: box-shadow 0.15s, transform 0.05s; }
-        .card:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
-        .card:active { transform: translateY(1px); }
-        .card-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px; font-size: 10.5px; color: #6b7280; }
-        .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
-        .badge-acceso { background: #fee2e2; color: #b91c1c; }
-        .badge-reembolso { background: #ffedd5; color: #c2410c; }
-        .badge-otro { background: #e0e7ff; color: #4338ca; }
-        .channel-tag { color: #4f46e5; font-weight: 500; }
-        .card-title { font-weight: 600; font-size: 13px; margin: 2px 0 6px; line-height: 1.3; word-break: break-word; }
-        .card-summary { font-size: 12px; color: #4b5563; margin-bottom: 8px; line-height: 1.4; word-break: break-word; }
-        .card-waiting { font-size: 11.5px; color: #374151; margin-bottom: 8px; }
-        .card-waiting b { color: #111; }
-        .card-actions { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
-        .btn { border: 1px solid #d1d5db; background: #fff; color: #374151; padding: 4px 9px; border-radius: 5px; font-size: 11px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 3px; }
-        .btn:hover { background: #f3f4f6; }
-        .btn-primary { background: #4f46e5; color: #fff; border-color: #4f46e5; }
-        .btn-done { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
-        .btn-back { color: #6b7280; }
-        .empty { text-align: center; color: #9ca3af; font-size: 12px; padding: 20px 8px; font-style: italic; }
-        .loading { text-align: center; padding: 40px 20px; color: #6b7280; grid-column: 1 / -1; }
-        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #ddd; border-top-color: #4f46e5; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px; }
+        .col[data-col="doing"] .col-header { color: #b45309; }
+        .col[data-col="done"]  .col-header { color: #047857; }
+        .col-header .count { background: #f1f5f9; color: var(--muted); border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 600; text-transform: none; letter-spacing: 0; }
+        .col-header .col-actions { display: flex; gap: 6px; align-items: center; }
+        .archive-all { background: #f1f5f9; border: 1px solid transparent; color: var(--muted); font-size: 11px; padding: 3px 10px; border-radius: 999px; cursor: pointer; text-transform: none; letter-spacing: 0; font-weight: 500; transition: all 0.15s; }
+        .archive-all:hover { background: #e2e8f0; color: var(--ink); }
+        .archive-all:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* CARDS */
+        .cards { display: flex; flex-direction: column; gap: 8px; }
+        .card { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; cursor: pointer; transition: all 0.15s; position: relative; }
+        .card:hover { border-color: #cbd5e1; box-shadow: 0 2px 8px rgba(15,23,42,0.06); transform: translateY(-1px); }
+        .card.waiting { border-left: 3px solid #f59e0b; padding-left: 11px; }
+        .card-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px; font-size: 11px; color: var(--muted); }
+        .card-meta .left { display: inline-flex; align-items: center; gap: 6px; }
+        .cat-tag { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.3px; }
+        .cat-tag.acceso    { color: #b91c1c; }
+        .cat-tag.reembolso { color: #c2410c; }
+        .cat-tag.otro      { color: #4338ca; }
+        .cat-tag .dot { width: 6px; height: 6px; border-radius: 50%; }
+        .cat-tag.acceso    .dot { background: #dc2626; }
+        .cat-tag.reembolso .dot { background: #ea580c; }
+        .cat-tag.otro      .dot { background: #6366f1; }
+        .channel-tag { color: var(--muted); font-weight: 500; }
+        .card-title { font-weight: 600; font-size: 13.5px; margin: 2px 0 4px; line-height: 1.35; word-break: break-word; color: var(--ink); }
+        .card-summary { font-size: 12px; color: #64748b; margin-bottom: 10px; line-height: 1.45; word-break: break-word; }
+        .card-actions { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+        .btn { border: 1px solid var(--border); background: #fff; color: var(--ink); padding: 4px 10px; border-radius: 6px; font-size: 11.5px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; font-weight: 500; transition: all 0.15s; }
+        .btn:hover { background: #f8fafc; border-color: #cbd5e1; }
+        .btn-primary { background: var(--brand); color: #fff; border-color: var(--brand); }
+        .btn-primary:hover { background: var(--brand-dark); border-color: var(--brand-dark); }
+        .btn-done { background: #dcfce7; color: #047857; border-color: #86efac; }
+        .btn-done:hover { background: #bbf7d0; }
+        .btn-back { color: var(--muted); }
+        .empty { text-align: center; color: #94a3b8; font-size: 12px; padding: 24px 8px; }
+        .loading { text-align: center; padding: 48px 20px; color: var(--muted); grid-column: 1 / -1; }
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #e2e8f0; border-top-color: var(--brand); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .error { background: #fef2f2; color: #991b1b; padding: 10px; border-radius: 8px; margin: 12px; font-size: 12px; }
-        details.archive { margin-top: 8px; padding: 6px 8px; background: #fff; border-radius: 6px; border: 1px solid #e5e7eb; }
-        details.archive summary { cursor: pointer; font-size: 11px; color: #6b7280; }
-        details.archive .archived-item { font-size: 11px; padding: 4px 0; border-top: 1px solid #f3f4f6; display: flex; justify-content: space-between; gap: 6px; }
-        details.archive .archived-item a { color: #4f46e5; text-decoration: none; }
-        .restore-btn { background: none; border: none; color: #4f46e5; cursor: pointer; font-size: 11px; padding: 0; }
-        .age-fresh { color: #15803d; }
+        .error { background: #fef2f2; color: #991b1b; padding: 12px 16px; border-radius: 8px; margin: 12px 22px; font-size: 12.5px; border: 1px solid #fecaca; }
+
+        /* ARCHIVED */
+        details.archive { margin-top: 10px; padding: 8px 10px; background: #f8fafc; border-radius: 8px; border: 1px solid var(--border); }
+        details.archive summary { cursor: pointer; font-size: 11.5px; color: var(--muted); font-weight: 500; }
+        details.archive .archived-item { font-size: 11.5px; padding: 6px 0; border-top: 1px solid var(--border); display: flex; justify-content: space-between; gap: 6px; }
+        details.archive .archived-item a { color: var(--brand); text-decoration: none; }
+        details.archive .archived-item a:hover { text-decoration: underline; }
+        .restore-btn { background: none; border: none; color: var(--brand); cursor: pointer; font-size: 11px; padding: 0; font-weight: 500; }
+        .age-fresh { color: #047857; }
         .age-medium { color: #c2410c; }
-        .age-old { color: #b91c1c; font-weight: 500; }
+        .age-old { color: #b91c1c; font-weight: 600; }
+        .header-stats { display: inline-flex; gap: 6px; align-items: center; font-size: 11.5px; color: var(--muted); }
+        .header-stats b { color: var(--ink); font-weight: 600; }
+        .header-stats .sep { color: #cbd5e1; }
+        .shared-tag { font-size: 10.5px; color: var(--muted); padding: 3px 8px; border-radius: 999px; background: #eef2f7; font-weight: 500; }
+        .shared-tag.local { background: #fef3c7; color: #92400e; }
 
         /* Modal */
         .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.55); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
@@ -752,33 +804,43 @@ export default function Page() {
       `}</style>
 
       <div className="header">
-        <div>
-          <h1>📋 Pipeline Incidencias Ventas</h1>
-          <div className="stats">
-            <span><b>{filtered.length}</b> hilos</span>
-            <span>⏳ <b>{waitingCount}</b> esperan respuesta</span>
-            <span>🔄 <b>{buckets.doing.length}</b> en progreso</span>
-            <span>✅ <b>{buckets.done.length}</b> hechos</span>
-            <span title={sharedMode ? 'Estado compartido entre todos los usuarios (Vercel KV, polling 15s)' : 'Estado solo en este navegador (KV no configurado)'}>
-              {sharedMode ? '🌐 compartido' : '💻 local'}
-            </span>
+        <div className="brand">
+          <div className="brand-logo">ICO</div>
+          <div>
+            <h1>Pipeline de Incidencias</h1>
+            <div className="header-stats">
+              <span><b>{filtered.length}</b> hilos</span>
+              <span className="sep">·</span>
+              <span><b>{waitingCount}</b> esperan respuesta</span>
+              <span className="sep">·</span>
+              <span><b>{buckets.doing.length}</b> en progreso</span>
+              <span className="sep">·</span>
+              <span><b>{buckets.done.length}</b> hechos</span>
+              <span className={`shared-tag${sharedMode ? '' : ' local'}`} title={sharedMode ? 'Estado compartido entre todos los usuarios' : 'Estado solo en este navegador'}>
+                {sharedMode ? 'Compartido' : 'Local'}
+              </span>
+            </div>
           </div>
         </div>
-        <div className="channel-filter">
-          <button className={activeFilter === 'all' ? 'active' : ''} onClick={() => setActiveFilter('all')}>Todos</button>
-          {config.channels.map(c => (
-            <button key={c.id} className={activeFilter === c.id ? 'active' : ''} onClick={() => setActiveFilter(c.id)}>
-              {channelLabel(c.id)}
-            </button>
-          ))}
-          <a className="manual-link" href="/manual" target="_blank" rel="noopener noreferrer" title="Abrir manual de uso">📖 Manual</a>
-          <button className="refresh-btn" onClick={loadAll} disabled={loading}>↻ {loading ? 'Cargando…' : 'Refrescar'}</button>
+        <div className="header-right">
+          <div className="pill-group">
+            <button className={activeFilter === 'all' ? 'active' : ''} onClick={() => setActiveFilter('all')}>Todos</button>
+            {config.channels.map(c => (
+              <button key={c.id} className={activeFilter === c.id ? 'active' : ''} onClick={() => setActiveFilter(c.id)}>
+                {channelLabel(c.id)}
+              </button>
+            ))}
+          </div>
+          <a className="icon-btn" href="/manual" target="_blank" rel="noopener noreferrer" title="Manual de uso">Manual</a>
+          <button className="refresh-btn" onClick={loadAll} disabled={loading}>
+            {loading ? 'Cargando…' : 'Refrescar'}
+          </button>
         </div>
       </div>
 
       <div className="filter-row">
         <div className="search-box">
-          <span style={{ color: '#9ca3af', fontSize: '12px' }}>🔍</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
           <input
             type="text"
             placeholder="Pega un link de Slack o busca por texto…"
@@ -789,46 +851,43 @@ export default function Page() {
             <button className="clear" onClick={() => setSearchQuery('')} aria-label="Limpiar">×</button>
           )}
         </div>
-      </div>
-      {trimmedQuery && (
-        <div className="search-status">
-          {parsedUrl ? (
-            filtered.length > 0
-              ? <>🔗 Link Slack → encontrado en <b>{channelLabel(parsedUrl.channelId)}</b></>
-              : <span className="miss">🔗 Link Slack → <b>no encontrado</b> en el pipeline (puede estar fuera de los últimos 14 días o en un canal no monitorizado)</span>
-          ) : (
-            <>🔎 Filtrando por <b>"{trimmedQuery}"</b> → {filtered.length} {filtered.length === 1 ? 'resultado' : 'resultados'}</>
-          )}
-        </div>
-      )}
-
-      <div className="filter-row">
         <button
-          className={onlyWaiting ? 'active' : ''}
+          className={`waiting-toggle${onlyWaiting ? ' active' : ''}`}
           onClick={() => setOnlyWaiting(v => !v)}
           title="Mostrar solo hilos donde se espera respuesta tuya"
-          style={{ background: onlyWaiting ? '#b45309' : '#fff', color: onlyWaiting ? '#fff' : '#b45309', borderColor: '#f59e0b', fontWeight: 600 }}
         >
-          ⏳ Solo espera mi respuesta{onlyWaiting ? ' ✓' : ''} ({cases.filter(c => c.waitingForMe).length})
+          Espera mi respuesta ({cases.filter(c => c.waitingForMe).length})
         </button>
-        <span style={{ width: 12 }} />
-        <span className="label">Categoría:</span>
+        <span style={{ width: 4 }} />
+        <span className="label">Categoría</span>
         {[
-          { key: 'all', label: 'Todas', cls: '' },
-          { key: 'acceso', label: '🔴 Acceso', cls: 'badge-acceso' },
-          { key: 'reembolso', label: '💰 Reembolso', cls: 'badge-reembolso' },
-          { key: 'otro', label: '📌 Otro', cls: 'badge-otro' },
+          { key: 'all', label: 'Todas', dot: null },
+          { key: 'acceso', label: 'Acceso', dot: '#dc2626' },
+          { key: 'reembolso', label: 'Reembolso', dot: '#ea580c' },
+          { key: 'otro', label: 'Otro', dot: '#6366f1' },
         ].map(cat => {
           const count = cat.key === 'all'
             ? Object.values(categoryCounts).reduce((a, b) => a + b, 0)
             : (categoryCounts[cat.key] || 0);
           return (
-            <button key={cat.key} className={activeCategory === cat.key ? 'active' : ''} onClick={() => setActiveCategory(cat.key)}>
-              {cat.label}<span className="count">({count})</span>
+            <button key={cat.key} className={`cat-btn${activeCategory === cat.key ? ' active' : ''}`} onClick={() => setActiveCategory(cat.key)}>
+              {cat.dot && <span className="cat-dot" style={{ background: cat.dot }} />}
+              {cat.label} <span className="count">{count}</span>
             </button>
           );
         })}
       </div>
+      {trimmedQuery && (
+        <div className="search-status">
+          {parsedUrl ? (
+            filtered.length > 0
+              ? <>Link Slack → encontrado en <b>{channelLabel(parsedUrl.channelId)}</b></>
+              : <span className="miss">Link Slack → <b>no encontrado</b> en el pipeline (puede estar fuera de los últimos 14 días o en un canal no monitorizado)</span>
+          ) : (
+            <>Filtrando por <b>"{trimmedQuery}"</b> → {filtered.length} {filtered.length === 1 ? 'resultado' : 'resultados'}</>
+          )}
+        </div>
+      )}
 
       {error && <div className="error">Error: {error}</div>}
 
@@ -837,17 +896,20 @@ export default function Page() {
           <div className="loading"><span className="spinner"></span> {progress || 'Cargando…'}</div>
         ) : (
           ['todo', 'doing', 'done'].map(colKey => {
-            const labels = { todo: '📥 Por revisar', doing: '🔄 En progreso', done: '✅ Hecho' };
-            const empties = { todo: '✨ Sin pendientes', doing: 'Nada en progreso', done: 'Aún nada cerrado' };
+            const labels = { todo: 'Por revisar', doing: 'En progreso', done: 'Hecho' };
+            const empties = { todo: 'Sin pendientes', doing: 'Nada en progreso', done: 'Aún nada cerrado' };
             const items = buckets[colKey];
             return (
               <div key={colKey} className="col" data-col={colKey}>
                 <div className="col-header">
-                  <span>{labels[colKey]}</span>
+                  <span className="col-title">
+                    <span className="col-dot" />
+                    {labels[colKey]}
+                  </span>
                   <span className="col-actions">
                     {colKey === 'done' && (
                       <button className="archive-all" onClick={archiveAllDone} disabled={items.length === 0} title="Archivar todas las tarjetas de Hecho">
-                        🗑 Archivar todos
+                        Archivar todos
                       </button>
                     )}
                     <span className="count">{items.length}</span>
@@ -859,37 +921,37 @@ export default function Page() {
                   ) : items.map(c => {
                     const age = ageFromTs(c.ts);
                     return (
-                      <div key={c.id} className="card" onClick={() => openModal(c)}>
+                      <div key={c.id} className={`card${c.waitingForMe ? ' waiting' : ''}`} onClick={() => openModal(c)}>
                         <div className="card-meta">
-                          <span>
-                            <span className={`badge ${c.category.cls}`}>{c.category.label}</span>{' '}
+                          <span className="left">
+                            <span className={`cat-tag ${c.category.key}`}>
+                              <span className="dot" />
+                              {c.category.key === 'acceso' ? 'Acceso' : c.category.key === 'reembolso' ? 'Reembolso' : 'Otro'}
+                            </span>
                             <span className="channel-tag">#{channelLabel(c.channelId)}</span>
                           </span>
                           <span className={age.cls}>{age.text}</span>
                         </div>
                         <div className="card-title">{c.title}</div>
                         <div className="card-summary">{c.lastText}</div>
-                        <div className="card-waiting">
-                          {c.waitingForMe ? <b>⏳ Espera respuesta tuya</b> : <span style={{ color: '#6b7280' }}>Última: {c.lastUser}</span>}
-                        </div>
                         <div className="card-actions" onClick={(e) => e.stopPropagation()}>
-                          <a className="btn btn-primary" href={c.deepLink || c.link} target="slack-thread" rel="noopener noreferrer">💬 Ver hilo</a>
+                          <a className="btn btn-primary" href={c.deepLink || c.link} target="slack-thread" rel="noopener noreferrer">Ver hilo</a>
                           {colKey === 'todo' && (
                             <>
-                              <button className="btn" onClick={() => setCaseStatus(c.id, 'doing')}>▶ En progreso</button>
-                              <button className="btn btn-done" onClick={() => setCaseStatus(c.id, 'done')}>✓ Hecho</button>
+                              <button className="btn" onClick={() => setCaseStatus(c.id, 'doing')}>En progreso</button>
+                              <button className="btn btn-done" onClick={() => setCaseStatus(c.id, 'done')}>Hecho</button>
                             </>
                           )}
                           {colKey === 'doing' && (
                             <>
-                              <button className="btn btn-back" onClick={() => setCaseStatus(c.id, 'todo')}>← Por revisar</button>
-                              <button className="btn btn-done" onClick={() => setCaseStatus(c.id, 'done')}>✓ Hecho</button>
+                              <button className="btn btn-back" onClick={() => setCaseStatus(c.id, 'todo')}>Por revisar</button>
+                              <button className="btn btn-done" onClick={() => setCaseStatus(c.id, 'done')}>Hecho</button>
                             </>
                           )}
                           {colKey === 'done' && (
                             <>
-                              <button className="btn btn-back" onClick={() => setCaseStatus(c.id, 'doing')}>↩ Reabrir</button>
-                              <button className="btn btn-back" onClick={() => archiveCase(c.id)}>🗑 Archivar</button>
+                              <button className="btn btn-back" onClick={() => setCaseStatus(c.id, 'doing')}>Reabrir</button>
+                              <button className="btn btn-back" onClick={() => archiveCase(c.id)}>Archivar</button>
                             </>
                           )}
                         </div>
