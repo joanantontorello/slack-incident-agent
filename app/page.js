@@ -711,7 +711,7 @@ export default function Page() {
 
   return (
     <>
-      <style jsx global>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         :root { color-scheme: light; --brand: #0068FF; --brand-dark: #0052cc; --bg: #f5f7fb; --ink: #0f172a; --muted: #64748b; --border: #e2e8f0; }
         * { box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif; margin: 0; background: var(--bg); color: var(--ink); font-size: 13px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
@@ -736,6 +736,8 @@ export default function Page() {
         .refresh-btn { background: var(--brand); color: #fff; border: none; padding: 7px 14px; border-radius: 8px; font-size: 12px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(0,104,255,0.25); }
         .refresh-btn:hover { background: var(--brand-dark); }
         .refresh-btn:disabled { opacity: 0.5; cursor: wait; }
+        .logout-btn { background: transparent; border: none; color: var(--muted); padding: 6px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: color 0.15s, background 0.15s; }
+        .logout-btn:hover { color: var(--ink); background: #f1f5f9; }
 
         /* SEARCH */
         .search-box { display: flex; align-items: center; gap: 8px; background: #f1f5f9; border-radius: 10px; padding: 8px 14px; flex: 1; max-width: 460px; transition: background 0.15s, box-shadow 0.15s; }
@@ -860,7 +862,7 @@ export default function Page() {
         .undo-bar .close { color: #64748b; font-size: 16px; margin-left: 2px; line-height: 1; }
         .undo-bar .close:hover { color: #cbd5e1; }
         @keyframes undoIn { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
-      `}</style>
+      ` }} />
 
       <div className="header">
         <div className="brand">
@@ -894,6 +896,21 @@ export default function Page() {
           <a className="icon-btn" href="/manual" target="_blank" rel="noopener noreferrer" title="Manual de uso">Manual</a>
           <button className="refresh-btn" onClick={loadAll} disabled={loading}>
             {loading ? 'Cargando…' : 'Refrescar'}
+          </button>
+          <button
+            className="logout-btn"
+            onClick={async () => {
+              try { await fetch('/api/login', { method: 'DELETE' }); } catch (e) {}
+              window.location.href = '/login';
+            }}
+            title="Cerrar sesión"
+            aria-label="Cerrar sesión"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+              <polyline points="10 17 15 12 10 7"/>
+              <line x1="15" y1="12" x2="3" y2="12"/>
+            </svg>
           </button>
         </div>
       </div>
