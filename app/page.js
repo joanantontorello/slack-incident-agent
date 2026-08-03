@@ -893,6 +893,7 @@ export default function Page() {
               </button>
             ))}
           </div>
+          <a className="icon-btn" href="/admin" title="Gestión de usuarios">Usuarios</a>
           <a className="icon-btn" href="/manual" target="_blank" rel="noopener noreferrer" title="Manual de uso">Manual</a>
           <button className="refresh-btn" onClick={loadAll} disabled={loading}>
             {loading ? 'Cargando…' : 'Refrescar'}

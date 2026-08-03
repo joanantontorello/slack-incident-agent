@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getKvUsers, isKvEnabled } from '../../lib/kv';
 
 export const runtime = 'nodejs';
 
@@ -9,7 +10,7 @@ function encodeCred(user, pass) {
   return Buffer.from(`${user}:${pass}`, 'utf-8').toString('base64');
 }
 
-function getValidCreds() {
+function getEnvCreds() {
   const multi = process.env.BASIC_AUTH_USERS;
   if (multi) {
     return multi.split(',').map(s => s.trim()).filter(Boolean).map(pair => {
@@ -23,14 +24,16 @@ function getValidCreds() {
 }
 
 export async function POST(req) {
-  const creds = getValidCreds();
-  if (creds.length === 0) {
+  const envCreds = getEnvCreds();
+  const kvUsers = isKvEnabled() ? await getKvUsers().catch(() => []) : [];
+  const allCreds = [...envCreds, ...kvUsers];
+  if (allCreds.length === 0) {
     return NextResponse.json({ ok: true, note: 'auth disabled' });
   }
   let body = {};
   try { body = await req.json(); } catch (e) {}
   const { user, pass } = body;
-  const match = creds.find(c => c.user === user && c.pass === pass);
+  const match = allCreds.find(c => c.user === user && c.pass === pass);
   if (!match) {
     return NextResponse.json({ ok: false, error: 'Credenciales incorrectas' }, { status: 401 });
   }

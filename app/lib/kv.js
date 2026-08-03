@@ -4,6 +4,7 @@
 const URL_ENV = 'KV_REST_API_URL';
 const TOKEN_ENV = 'KV_REST_API_TOKEN';
 const STATE_KEY = 'pipeline-state';
+const USERS_KEY = 'pipeline-users';
 
 export function isKvEnabled() {
   return !!(process.env[URL_ENV] && process.env[TOKEN_ENV]);
@@ -57,4 +58,35 @@ export async function applyPatches(patches) {
   }
   await kvSetJson(STATE_KEY, state);
   return state;
+}
+
+// ============ USERS ============
+export async function getKvUsers() {
+  if (!isKvEnabled()) return [];
+  const r = await kvCommand(['get', USERS_KEY]);
+  if (!r || r.result == null) return [];
+  try {
+    const parsed = typeof r.result === 'string' ? JSON.parse(r.result) : r.result;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export async function addKvUser({ user, pass }) {
+  if (!isKvEnabled()) throw new Error('KV not configured');
+  if (!user || !pass) throw new Error('user and pass required');
+  const users = await getKvUsers();
+  if (users.some(u => u.user === user)) throw new Error(`Ya existe un usuario "${user}"`);
+  users.push({ user, pass, addedAt: Date.now() });
+  await kvSetJson(USERS_KEY, users);
+  return users;
+}
+
+export async function removeKvUser(user) {
+  if (!isKvEnabled()) throw new Error('KV not configured');
+  const users = await getKvUsers();
+  const next = users.filter(u => u.user !== user);
+  await kvSetJson(USERS_KEY, next);
+  return next;
 }
