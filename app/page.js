@@ -671,16 +671,16 @@ export default function Page() {
         /* HEADER */
         .header { display: flex; align-items: center; justify-content: space-between; padding: 14px 22px; background: #fff; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; gap: 14px; flex-wrap: wrap; }
         .brand { display: flex; align-items: center; gap: 12px; }
-        .brand-logo { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; letter-spacing: 0.5px; box-shadow: 0 2px 6px rgba(0,104,255,0.25); }
+        .brand-logo { width: 40px; height: 40px; border-radius: 10px; object-fit: contain; background: #fff; }
         .brand h1 { margin: 0; font-size: 15px; font-weight: 600; color: var(--ink); letter-spacing: -0.2px; }
         .brand .subtitle { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
         .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
-        /* PILL TOGGLE GROUP (channel filter) */
-        .pill-group { display: inline-flex; background: #eef2f7; border-radius: 999px; padding: 3px; gap: 2px; }
-        .pill-group button { background: transparent; border: none; padding: 5px 14px; border-radius: 999px; font-size: 12px; color: var(--muted); cursor: pointer; font-weight: 500; transition: all 0.15s; }
+        /* PILL TOGGLE GROUP — estilo recobros: contenedor blanco, activo azul */
+        .pill-group { display: inline-flex; background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 4px; gap: 2px; box-shadow: 0 1px 2px rgba(15,23,42,0.04); }
+        .pill-group button { background: transparent; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; color: var(--muted); cursor: pointer; font-weight: 500; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; }
         .pill-group button:hover { color: var(--ink); }
-        .pill-group button.active { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(15,23,42,0.08); font-weight: 600; }
+        .pill-group button.active { background: var(--brand); color: #fff; font-weight: 600; box-shadow: 0 1px 3px rgba(0,104,255,0.35); }
 
         /* HEADER BUTTONS */
         .icon-btn { background: #fff; border: 1px solid var(--border); color: var(--ink); padding: 6px 12px; border-radius: 8px; font-size: 12px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; transition: all 0.15s; }
@@ -714,7 +714,10 @@ export default function Page() {
         /* BOARD */
         .board { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; padding: 18px 22px; min-height: calc(100vh - 130px); }
         @media (max-width: 900px) { .board { grid-template-columns: 1fr; } }
-        .col { background: #fff; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(15,23,42,0.03); }
+        .col { border-radius: 12px; padding: 12px; display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(15,23,42,0.03); }
+        .col[data-col="todo"]  { background: linear-gradient(180deg, #fef2f2 0%, #fef7f7 40%, #ffffff 100%); border-color: #fecaca; }
+        .col[data-col="doing"] { background: linear-gradient(180deg, #fffbeb 0%, #fffdf3 40%, #ffffff 100%); border-color: #fde68a; }
+        .col[data-col="done"]  { background: linear-gradient(180deg, #f0fdf4 0%, #f5fdf7 40%, #ffffff 100%); border-color: #a7f3d0; }
         .col-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 12px; font-weight: 600; font-size: 12px; letter-spacing: 0.3px; text-transform: uppercase; }
         .col-header .col-title { display: inline-flex; align-items: center; gap: 8px; }
         .col-header .col-dot { width: 8px; height: 8px; border-radius: 50%; }
@@ -805,7 +808,8 @@ export default function Page() {
 
       <div className="header">
         <div className="brand">
-          <div className="brand-logo">ICO</div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="brand-logo" src="https://comisiones-app-inky.vercel.app/static/logo-ico.png" alt="ICO" />
           <div>
             <h1>Pipeline de Incidencias</h1>
             <div className="header-stats">
