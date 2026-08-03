@@ -937,7 +937,6 @@ export default function Page() {
                           <span className={age.cls}>{age.text}</span>
                         </div>
                         <div className="card-title">{c.title}</div>
-                        <div className="card-summary">{c.lastText}</div>
                         <div className="card-actions" onClick={(e) => e.stopPropagation()}>
                           <a className="btn btn-primary" href={c.deepLink || c.link} target="slack-thread" rel="noopener noreferrer">Ver hilo</a>
                           {colKey === 'todo' && (
