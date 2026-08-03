@@ -6,32 +6,51 @@ export const config = {
 
 const COOKIE_NAME = 'pipeline_auth';
 
-function isValidBasic(header, user, pass) {
+// Lista de credenciales válidas. BASIC_AUTH_USERS admite formato
+// "user1:pass1,user2:pass2,…" para soportar múltiples usuarios.
+// Retrocompatibilidad: si no está, cae a BASIC_AUTH_USER / BASIC_AUTH_PASS.
+function getValidCreds() {
+  const multi = process.env.BASIC_AUTH_USERS;
+  if (multi) {
+    return multi.split(',').map(s => s.trim()).filter(Boolean).map(pair => {
+      const sep = pair.indexOf(':');
+      return { user: pair.slice(0, sep), pass: pair.slice(sep + 1) };
+    }).filter(c => c.user && c.pass);
+  }
+  const u = process.env.BASIC_AUTH_USER;
+  const p = process.env.BASIC_AUTH_PASS;
+  return u && p ? [{ user: u, pass: p }] : [];
+}
+
+function matches(creds, u, p) {
+  return creds.some(c => c.user === u && c.pass === p);
+}
+
+function isValidBasic(header, creds) {
   if (!header) return false;
   const [scheme, encoded] = header.split(' ');
   if (scheme !== 'Basic' || !encoded) return false;
   try {
     const decoded = atob(encoded);
     const sep = decoded.indexOf(':');
-    return decoded.slice(0, sep) === user && decoded.slice(sep + 1) === pass;
+    return matches(creds, decoded.slice(0, sep), decoded.slice(sep + 1));
   } catch (e) { return false; }
 }
 
-function isValidCookie(value, user, pass) {
+function isValidCookie(value, creds) {
   if (!value) return false;
   try {
     const decoded = atob(value);
     const sep = decoded.indexOf(':');
-    return decoded.slice(0, sep) === user && decoded.slice(sep + 1) === pass;
+    return matches(creds, decoded.slice(0, sep), decoded.slice(sep + 1));
   } catch (e) { return false; }
 }
 
 export function middleware(request) {
-  const user = process.env.BASIC_AUTH_USER;
-  const pass = process.env.BASIC_AUTH_PASS;
+  const creds = getValidCreds();
 
   // Sin auth configurada → pasar (dev local)
-  if (!user || !pass) return NextResponse.next();
+  if (creds.length === 0) return NextResponse.next();
 
   const pathname = request.nextUrl.pathname;
 
@@ -41,11 +60,11 @@ export function middleware(request) {
   }
 
   const cookie = request.cookies.get(COOKIE_NAME)?.value;
-  if (isValidCookie(cookie, user, pass)) return NextResponse.next();
+  if (isValidCookie(cookie, creds)) return NextResponse.next();
 
   // Basic auth por header sigue funcionando (para /api con curl, etc.)
   const authHeader = request.headers.get('authorization');
-  if (isValidBasic(authHeader, user, pass)) return NextResponse.next();
+  if (isValidBasic(authHeader, creds)) return NextResponse.next();
 
   // Rutas /api sin auth → 401 JSON (para clientes programáticos)
   if (pathname.startsWith('/api/')) {
