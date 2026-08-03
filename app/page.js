@@ -255,6 +255,8 @@ export default function Page() {
   const [modalUsers, setModalUsers] = useState({});
   const [modalLoading, setModalLoading] = useState(false);
   const [toast, setToast] = useState(null);
+  const [undoAction, setUndoAction] = useState(null);
+  const [lastSeenTs, setLastSeenTs] = useState(0);
 
   // Inicialización del estado: intenta KV; si no, localStorage.
   // Migración: si KV está vacío y localStorage tiene datos, los sube
@@ -273,8 +275,6 @@ export default function Page() {
           const res = await postPatches(patches);
           if (res.enabled && res.cases) {
             setState({ cases: res.cases });
-            setToast({ msg: `📤 Migrados ${patches.length} casos de tu estado local al compartido`, kind: 'ok', id: Date.now() });
-            setTimeout(() => setToast(null), 6000);
           } else {
             setState({ cases: serverCases });
           }
@@ -335,14 +335,16 @@ export default function Page() {
     if (sharedMode) {
       const res = await postPatches(patches);
       if (res.enabled && res.cases) setState({ cases: res.cases });
-      else if (res.error) showToast(`⚠️ Sync state falló: ${res.error}`, 'warn');
+      else if (res.error) console.warn('sync state:', res.error);
     }
-  }, [sharedMode, showToast]);
+  }, [sharedMode]);
 
-  const loadAll = useCallback(async () => {
-    setLoading(true);
+  const loadAll = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLoading(true);
+      setProgress('Leyendo canales…');
+    }
     setError(null);
-    setProgress('Leyendo canales…');
     try {
       const cfgRes = await fetch('/api/config').then(r => r.json());
       setConfig(cfgRes);
@@ -502,18 +504,45 @@ export default function Page() {
       }
       if (patches.length > 0) {
         persistPatches(patches);
-        showToast(`✅ ${patches.length} ${patches.length === 1 ? 'hilo movido' : 'hilos movidos'} a Hecho (reacción ✅ en Slack)`, 'ok');
       }
 
+      if (!silent) {
+        // Solo actualizamos "última visita" en refresh manual — así el
+        // auto-refresh puede traer nuevos y mantener el puntito azul.
+        const now = Date.now() / 1000;
+        try { localStorage.setItem('pipeline_lastSeen', String(now)); } catch (e) {}
+        setLastSeenTs(now);
+      }
       setLoading(false);
       setProgress('');
     } catch (e) {
       setError(e.message || String(e));
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  // Inicializar lastSeenTs (nada marcado como nuevo en el primer arranque)
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('pipeline_lastSeen');
+      if (stored) setLastSeenTs(parseFloat(stored));
+      else {
+        const now = Date.now() / 1000;
+        localStorage.setItem('pipeline_lastSeen', String(now));
+        setLastSeenTs(now);
+      }
+    } catch (e) {}
+  }, []);
+
+  // Auto-refresh silencioso cada 5 min mientras la pestaña esté visible
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!document.hidden && !loading) loadAll({ silent: true });
+    }, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [loadAll, loading]);
 
   const openModal = useCallback(async (c) => {
     setModalCase(c);
@@ -562,49 +591,46 @@ export default function Page() {
         body: JSON.stringify({ channel: c.channelId, ts: c.ts, emoji, undo, markRead }),
       });
       const data = await res.json().catch(() => ({}));
-      const reaction = data.reaction;
-      const mark = data.mark;
-      const as = data.reactionAs || '?';
-      const reactionOK = reaction === 'ok' || reaction === 'noop';
-      // mark === null cuando no se pidió mark-as-read (transiciones que
-      // no son a "done"); en ese caso no es un fallo.
-      const markOK = mark == null || mark === 'ok' || (typeof mark === 'string' && mark.startsWith('skipped'));
-      const verb = undo ? '↩ Reacción quitada' : '✅ Reacción puesta';
-      const emojiTxt = emoji ? `:${emoji}:` : '';
-      if (reactionOK && markOK) {
-        showToast(`${verb} ${emojiTxt} (como ${as})`, 'ok');
-      } else {
-        const parts = [`as=${as}`, `emoji=${emoji}`];
-        if (!reactionOK) parts.push(`reacción: ${reaction || 'sin respuesta'}`);
-        if (!markOK)     parts.push(`mark: ${mark}`);
-        showToast(`⚠️ Sync parcial → ${parts.join(' · ')}`, 'warn');
+      // Silent — log solo en consola para debug, no molestar al usuario
+      // con warnings de missing_scope u otros detalles del backend.
+      if (data.reaction && data.reaction !== 'ok' && data.reaction !== 'noop') {
+        console.warn('slack reaction:', data.reaction, 'emoji=', emoji);
+      }
+      if (data.mark && data.mark !== 'ok' && !String(data.mark).startsWith('skipped')) {
+        console.warn('slack mark:', data.mark);
       }
     } catch (e) {
-      showToast(`❌ Sync falló: ${e.message || e}`, 'err');
+      console.warn('sync failed:', e);
     }
-  }, [showToast]);
+  }, []);
+
+  const applyReactionsForTransition = useCallback((c, from, to) => {
+    if (from === to) return;
+    if (to === 'doing' && from !== 'doing') syncReaction(c, { emoji: 'eyes' });
+    else if (from === 'doing' && to !== 'doing') syncReaction(c, { emoji: 'eyes', undo: true });
+    if (to === 'done' && from !== 'done') syncReaction(c, { emoji: 'white_check_mark', markRead: true });
+    else if (from === 'done' && to !== 'done') syncReaction(c, { emoji: 'white_check_mark', undo: true });
+  }, [syncReaction]);
 
   const setCaseStatus = (caseId, status) => {
     const prev = state.cases[caseId] || {};
     const prevStatus = prev.status || 'todo';
+    if (prevStatus === status) return;
     const patch = { status, ...(status === 'done' ? { doneAt: Date.now() } : {}) };
     persistPatches([{ caseId, patch }]);
-
     const c = cases.find(x => x.id === caseId);
     if (!c) return;
-
-    // Reacciones por transición:
-    //   doing → 👀  (eyes)        done → ✅ (white_check_mark, + mark as read)
-    if (status === 'doing' && prevStatus !== 'doing') {
-      syncReaction(c, { emoji: 'eyes' });
-    } else if (prevStatus === 'doing' && status !== 'doing') {
-      syncReaction(c, { emoji: 'eyes', undo: true });
-    }
-    if (status === 'done' && prevStatus !== 'done') {
-      syncReaction(c, { emoji: 'white_check_mark', markRead: true });
-    } else if (prevStatus === 'done' && status !== 'done') {
-      syncReaction(c, { emoji: 'white_check_mark', undo: true });
-    }
+    applyReactionsForTransition(c, prevStatus, status);
+    const label = status === 'done' ? 'Movida a Hecho' : status === 'doing' ? 'Movida a En progreso' : 'Movida a Por revisar';
+    setUndoAction({
+      id: Date.now(),
+      label,
+      run: () => {
+        persistPatches([{ caseId, patch: { status: prevStatus, ...(prevStatus !== 'done' && prev.doneAt ? {} : {}) } }]);
+        applyReactionsForTransition(c, status, prevStatus);
+        setUndoAction(null);
+      },
+    });
   };
 
   const archiveAllDone = () => {
@@ -612,15 +638,37 @@ export default function Page() {
       .filter(c => (state.cases[c.id]?.status || 'todo') === 'done' && !state.cases[c.id]?.archived)
       .map(c => c.id);
     if (doneIds.length === 0) return;
-    if (!confirm(`¿Archivar ${doneIds.length} ${doneIds.length === 1 ? 'tarjeta' : 'tarjetas'} de Hecho?`)) return;
     persistPatches(doneIds.map(caseId => ({ caseId, patch: { archived: true } })));
+    setUndoAction({
+      id: Date.now(),
+      label: `Archivadas ${doneIds.length} ${doneIds.length === 1 ? 'tarjeta' : 'tarjetas'}`,
+      run: () => {
+        persistPatches(doneIds.map(caseId => ({ caseId, patch: { archived: false } })));
+        setUndoAction(null);
+      },
+    });
   };
   const archiveCase = (caseId) => {
     persistPatches([{ caseId, patch: { archived: true } }]);
+    setUndoAction({
+      id: Date.now(),
+      label: 'Archivada',
+      run: () => {
+        persistPatches([{ caseId, patch: { archived: false } }]);
+        setUndoAction(null);
+      },
+    });
   };
   const restoreCase = (caseId) => {
     persistPatches([{ caseId, patch: { archived: false, status: 'todo' } }]);
   };
+
+  // Auto-dismiss undo tras 6s
+  useEffect(() => {
+    if (!undoAction) return;
+    const id = setTimeout(() => setUndoAction(u => (u && u.id === undoAction.id ? null : u)), 6000);
+    return () => clearTimeout(id);
+  }, [undoAction]);
 
   // Filter and bucket
   const trimmedQuery = searchQuery.trim();
@@ -739,6 +787,8 @@ export default function Page() {
         .card:hover { box-shadow: 0 4px 14px rgba(15,23,42,0.08), 0 0 0 1px rgba(15,23,42,0.06); transform: translateY(-1px); }
         .card.waiting { box-shadow: 0 1px 2px rgba(15,23,42,0.05), inset 3px 0 0 #f59e0b, 0 0 0 1px rgba(15,23,42,0.03); }
         .card.waiting:hover { box-shadow: 0 4px 14px rgba(15,23,42,0.08), inset 3px 0 0 #f59e0b, 0 0 0 1px rgba(15,23,42,0.06); }
+        .card.is-new::before { content: ''; position: absolute; top: 12px; right: 12px; width: 8px; height: 8px; border-radius: 50%; background: var(--brand); box-shadow: 0 0 0 3px #fff; }
+        .card.is-new .card-meta { padding-right: 16px; }
         .card-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px; font-size: 11px; color: var(--muted); }
         .card-meta .left { display: inline-flex; align-items: center; gap: 6px; }
         .cat-tag { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.3px; }
@@ -802,11 +852,14 @@ export default function Page() {
         .modal-msg .text .link { color: #2563eb; text-decoration: underline; }
         .modal-msg .text .link:hover { color: #1d4ed8; }
         .modal-footer { padding: 10px 18px; border-top: 1px solid #e5e7eb; display: flex; justify-content: flex-end; gap: 8px; background: #f8f9fb; }
-        .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 10px 16px; border-radius: 8px; font-size: 12.5px; box-shadow: 0 6px 20px rgba(0,0,0,0.18); z-index: 200; max-width: 90vw; }
-        .toast.ok   { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
-        .toast.warn { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
-        .toast.err  { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
-        .toast.info { background: #e0e7ff; color: #3730a3; border: 1px solid #a5b4fc; }
+        /* Undo bar — minimalista, oscuro, centrado abajo */
+        .undo-bar { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #0f172a; color: #f8fafc; padding: 10px 16px; border-radius: 999px; font-size: 13px; display: flex; align-items: center; gap: 14px; box-shadow: 0 10px 30px rgba(15,23,42,0.25); z-index: 200; animation: undoIn 0.18s ease-out; }
+        .undo-bar .undo-label { font-weight: 500; }
+        .undo-bar button { background: none; border: none; color: #93c5fd; cursor: pointer; font-size: 13px; font-weight: 600; padding: 0; }
+        .undo-bar button:hover { color: #dbeafe; }
+        .undo-bar .close { color: #64748b; font-size: 16px; margin-left: 2px; line-height: 1; }
+        .undo-bar .close:hover { color: #cbd5e1; }
+        @keyframes undoIn { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
       `}</style>
 
       <div className="header">
@@ -928,7 +981,7 @@ export default function Page() {
                   ) : items.map(c => {
                     const age = ageFromTs(c.ts);
                     return (
-                      <div key={c.id} className={`card${c.waitingForMe ? ' waiting' : ''}`} onClick={() => openModal(c)}>
+                      <div key={c.id} className={`card${c.waitingForMe ? ' waiting' : ''}${lastSeenTs && parseFloat(c.ts) > lastSeenTs ? ' is-new' : ''}`} onClick={() => openModal(c)}>
                         <div className="card-meta">
                           <span className="left">
                             <span className={`cat-tag ${c.category.key}`}>
@@ -983,8 +1036,12 @@ export default function Page() {
         )}
       </div>
 
-      {toast && (
-        <div className={`toast ${toast.kind}`} onClick={() => setToast(null)}>{toast.msg}</div>
+      {undoAction && (
+        <div className="undo-bar">
+          <span className="undo-label">{undoAction.label}</span>
+          <button onClick={undoAction.run}>Deshacer</button>
+          <button className="close" onClick={() => setUndoAction(null)} aria-label="Cerrar">×</button>
+        </div>
       )}
 
       {modalCase && (
