@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 
 const STORAGE_KEY = 'pipeline_incidencias_v1';
 
@@ -339,6 +339,16 @@ export default function Page() {
     }
   }, [sharedMode]);
 
+  // Refs para que loadAll (useCallback [], captura stale) siempre lea
+  // los valores actuales de sharedMode / state / persistPatches al
+  // ejecutarse — sin regenerar loadAll (evita re-triggerar su useEffect).
+  const sharedModeRef = useRef(sharedMode);
+  useEffect(() => { sharedModeRef.current = sharedMode; }, [sharedMode]);
+  const stateRef = useRef(state);
+  useEffect(() => { stateRef.current = state; }, [state]);
+  const persistPatchesRef = useRef();
+  useEffect(() => { persistPatchesRef.current = persistPatches; }, [persistPatches]);
+
   const loadAll = useCallback(async ({ silent = false } = {}) => {
     if (!silent) {
       setLoading(true);
@@ -506,10 +516,9 @@ export default function Page() {
 
       setCases(allCases);
 
-      // Auto-promoción a "done" para hilos donde Joan ya reaccionó con ✅
-      // en Slack (única fuente de verdad). Se aplica sobre el state actual
-      // (KV si está, localStorage si no).
-      const baseCases = (sharedMode ? state.cases : (loadState().cases || {}));
+      // Auto-promoción a "done" — usa refs para leer sharedMode/state/persist
+      // actuales (no los del cierre inicial de loadAll).
+      const baseCases = (sharedModeRef.current ? stateRef.current.cases : (loadState().cases || {}));
       const patches = [];
       for (const c of allCases) {
         if (!c.checkedByMe) continue;
@@ -518,8 +527,8 @@ export default function Page() {
           patches.push({ caseId: c.id, patch: { status: 'done', doneAt: prev.doneAt || Date.now(), autoFromSlack: true } });
         }
       }
-      if (patches.length > 0) {
-        persistPatches(patches);
+      if (patches.length > 0 && persistPatchesRef.current) {
+        persistPatchesRef.current(patches);
       }
 
       if (!silent) {
