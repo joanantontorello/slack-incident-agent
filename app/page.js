@@ -459,14 +459,30 @@ export default function Page() {
 
           // ¿Alguno de los usuarios "responsables" (Joan, Lautaro, …)
           // reaccionó con ✅ al mensaje raíz? → considerar Hecho.
+          // Aceptamos varios nombres de emoji porque el workspace puede
+          // tener aliases o custom emojis (white_tick, check, etc.) que
+          // visualmente son ✅ pero tienen distinto nombre interno.
+          const DONE_EMOJIS = ['white_check_mark', 'white_tick', 'ballot_box_with_check', 'heavy_check_mark', 'check', 'check_mark', 'green_check_mark', 'greentick', 'green_tick', 'tick'];
           const autoDoneIds = Array.isArray(cfgRes.autoDoneUserIds) && cfgRes.autoDoneUserIds.length > 0
             ? cfgRes.autoDoneUserIds
             : (myId ? [myId] : []);
           const rootReactions = Array.isArray(root.reactions) ? root.reactions : [];
           const checkedByMe = autoDoneIds.length > 0 && rootReactions.some(r =>
-            r && r.name === 'white_check_mark' && Array.isArray(r.users) &&
+            r && DONE_EMOJIS.includes(r.name) && Array.isArray(r.users) &&
             r.users.some(u => autoDoneIds.includes(u))
           );
+          // Diag: si hay reacciones de tus usuarios pero ninguna es
+          // de las que reconocemos como "done", loguea los nombres.
+          if (!checkedByMe && autoDoneIds.length > 0) {
+            const mineReactions = rootReactions.filter(r =>
+              r && Array.isArray(r.users) && r.users.some(u => autoDoneIds.includes(u))
+            );
+            if (mineReactions.length > 0) {
+              console.info('[dashboard] reacciones tuyas no reconocidas como Done:',
+                mineReactions.map(r => `:${r.name}:`).join(' '),
+                'en hilo', f.ts);
+            }
+          }
 
           allCases.push({
             id: `${f.channel}-${f.ts}`,
