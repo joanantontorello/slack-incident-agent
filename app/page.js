@@ -515,6 +515,98 @@ export default function Page() {
         }
       }
 
+      // Recuperación: tarjetas con estado persistido (status != done y no
+      // archivadas) que han caído fuera del window de 14 días no deben
+      // desaparecer. Buscamos sus IDs en KV, los que no estén ya en
+      // allCases los recuperamos pidiendo su hilo directamente.
+      const baseCasesForRecover = (sharedModeRef.current ? stateRef.current.cases : (loadState().cases || {}));
+      const builtIds = new Set(allCases.map(c => c.id));
+      const toRecover = Object.entries(baseCasesForRecover)
+        .filter(([id, s]) => {
+          if (builtIds.has(id)) return false;
+          if (s.archived) return false;
+          const st = s.status || 'todo';
+          return st === 'todo' || st === 'doing';
+        })
+        .map(([id]) => {
+          const sep = id.indexOf('-');
+          return { id, channel: id.slice(0, sep), ts: id.slice(sep + 1) };
+        });
+
+      if (toRecover.length > 0) {
+        setProgress(`Recuperando ${toRecover.length} hilos antiguos pendientes…`);
+        const recResults = await Promise.all(toRecover.map(async r => {
+          try {
+            const resp = await fetch(`/api/thread?channel=${r.channel}&ts=${r.ts}`).then(x => x.json());
+            return { ...r, messages: resp.messages || [] };
+          } catch (e) {
+            return { ...r, messages: [], error: String(e.message || e) };
+          }
+        }));
+        // Resolver nombres de los usuarios nuevos que aparezcan
+        const extraIds = new Set();
+        for (const r of recResults) {
+          for (const m of r.messages) {
+            if (m && m.user) extraIds.add(m.user);
+            if (m && m.text) { const re = /<@([A-Z0-9]+)>/g; let mm; while ((mm = re.exec(m.text)) !== null) extraIds.add(mm[1]); }
+          }
+        }
+        const missingIds = Array.from(extraIds).filter(i => !users[i]).join(',');
+        if (missingIds) {
+          try {
+            const ur2 = await fetch(`/api/users?ids=${missingIds}`).then(x => x.json());
+            Object.assign(users, ur2.users || {});
+          } catch (e) {}
+        }
+        // Construir cases recuperados
+        for (const r of recResults) {
+          try {
+            const msgs = r.messages;
+            if (msgs.length === 0) continue;
+            const root = msgs[0];
+            const rootText = String(root.text || '');
+            const rootUser = root.user || '';
+            const replies = msgs.slice(1);
+            const repliesText = replies.map(x => String((x && x.text) || '')).join(' ');
+            const allText = rootText + ' ' + repliesText;
+            const lastMsg = replies.length > 0 ? (replies[replies.length - 1] || {}) : root;
+            const lastUserId = lastMsg.user || rootUser;
+            const lastText = String(lastMsg.text || rootText);
+            const waitingForMe = (() => {
+              if (!myId) return false;
+              if (replies.length === 0) return rootText.includes(myId) && rootUser !== myId;
+              if (lastUserId === myId) return false;
+              return allText.includes(myId);
+            })();
+            const DONE_EMOJIS = ['white_check_mark', 'white_tick', 'ballot_box_with_check', 'heavy_check_mark', 'check', 'check_mark', 'green_check_mark', 'greentick', 'green_tick', 'tick'];
+            const autoDoneIds = Array.isArray(cfgRes.autoDoneUserIds) && cfgRes.autoDoneUserIds.length > 0
+              ? cfgRes.autoDoneUserIds : (myId ? [myId] : []);
+            const rootReactions = Array.isArray(root.reactions) ? root.reactions : [];
+            const checkedByMe = autoDoneIds.length > 0 && rootReactions.some(x =>
+              x && DONE_EMOJIS.includes(x.name) && Array.isArray(x.users) && x.users.some(u => autoDoneIds.includes(u))
+            );
+            allCases.push({
+              id: r.id,
+              channelId: r.channel,
+              ts: r.ts,
+              title: extractTitle(rootText, users) || '(sin título)',
+              summary: shortenText(rootText, 180, users),
+              lastUser: users[lastUserId] || lastUserId || 'desconocido',
+              lastText: shortenText(lastText, 150, users),
+              category: categorize(allText),
+              waitingForMe,
+              checkedByMe,
+              link: buildSlackLink(r.channel, r.ts, cfgRes?.team?.url),
+              deepLink: buildSlackDeepLink(r.channel, r.ts, cfgRes?.team?.team_id),
+              replyCount: replies.length,
+              recovered: true,
+            });
+          } catch (err) {
+            console.warn('Error recuperando hilo', r.id, err);
+          }
+        }
+      }
+
       setCases(allCases);
 
       // Auto-promoción a "done" — usa refs para leer sharedMode/state/persist
