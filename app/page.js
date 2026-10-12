@@ -734,13 +734,13 @@ export default function Page() {
             aiReason: r.reason,
             aiAnalyzedAt: Date.now(),
           };
-          // Modo conservador: solo auto-mover si RESUELTO + confidence high
+          // Auto-mover si RESUELTO con confianza high O medium (los low
+          // los deja marcados para revisión manual).
           const c = cases.find(x => x.id === caseId);
-          if (r.verdict === 'RESUELTO' && r.confidence === 'high' && c) {
+          if (r.verdict === 'RESUELTO' && (r.confidence === 'high' || r.confidence === 'medium') && c) {
             patch.status = 'done';
             patch.doneAt = Date.now();
             autoMoved++;
-            // sync Slack ✅ + mark read
             applyReactionsForTransition(c, 'todo', 'done');
           }
           patches.push({ caseId, patch });
@@ -1124,10 +1124,11 @@ export default function Page() {
                             <span className="channel-tag">#{channelLabel(c.channelId)}</span>
                             {(() => {
                               const v = state.cases[c.id]?.aiVerdict;
+                              const conf = state.cases[c.id]?.aiConfidence;
                               const r = state.cases[c.id]?.aiReason;
                               if (v === 'ESPERA_JOAN') return <span className="ai-badge waiting-joan" title={r || ''}>⚡ Tú</span>;
-                              if (v === 'ESPERA_CLIENTE') return <span className="ai-badge waiting-customer" title={r || ''}>⏳ Cliente</span>;
-                              if (v === 'RESUELTO') return <span className="ai-badge resolved" title={r || ''}>✓ IA</span>;
+                              if (v === 'EN_CURSO' || v === 'ESPERA_CLIENTE') return <span className="ai-badge waiting-customer" title={r || ''}>⏳ En curso</span>;
+                              if (v === 'RESUELTO') return <span className="ai-badge resolved" title={r || ''}>✓ IA{conf === 'low' ? ' ?' : ''}</span>;
                               return null;
                             })()}
                           </span>
