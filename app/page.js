@@ -257,6 +257,7 @@ export default function Page() {
   const [toast, setToast] = useState(null);
   const [undoAction, setUndoAction] = useState(null);
   const [lastSeenTs, setLastSeenTs] = useState(0);
+  const [aiProgress, setAiProgress] = useState(null); // {done, total, errors}
 
   // Inicialización del estado: intenta KV; si no, localStorage.
   // Migración: si KV está vacío y localStorage tiene datos, los sube
@@ -688,6 +689,80 @@ export default function Page() {
     persistPatches([{ caseId, patch: { archived: false, status: 'todo' } }]);
   };
 
+  // Barrido con IA — analiza las tarjetas de "Por revisar", clasifica
+  // cada hilo (RESUELTO/ESPERA_JOAN/ESPERA_CLIENTE) y auto-mueve a Hecho
+  // las resueltas con alta confianza. El resto se queda con un badge.
+  const analyzeAll = useCallback(async () => {
+    const todoCases = cases.filter(c => {
+      const s = state.cases[c.id] || {};
+      return (s.status || 'todo') === 'todo' && !s.archived;
+    });
+    if (todoCases.length === 0) {
+      setUndoAction({ id: Date.now(), label: 'Nada que analizar', run: () => setUndoAction(null) });
+      return;
+    }
+    setAiProgress({ done: 0, total: todoCases.length, errors: 0 });
+
+    const CHUNK = 10;
+    let autoMoved = 0;
+    for (let i = 0; i < todoCases.length; i += CHUNK) {
+      const batch = todoCases.slice(i, i + CHUNK);
+      try {
+        const res = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cases: batch.map(c => ({ channelId: c.channelId, ts: c.ts })),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setAiProgress(p => ({ ...p, errors: p.errors + batch.length }));
+          console.warn('analyze batch error:', data.error);
+          continue;
+        }
+        const patches = [];
+        for (const r of data.results || []) {
+          const caseId = `${r.channelId}-${r.ts}`;
+          if (r.error) {
+            setAiProgress(p => ({ ...p, errors: p.errors + 1 }));
+            continue;
+          }
+          const patch = {
+            aiVerdict: r.verdict,
+            aiConfidence: r.confidence,
+            aiReason: r.reason,
+            aiAnalyzedAt: Date.now(),
+          };
+          // Modo conservador: solo auto-mover si RESUELTO + confidence high
+          const c = cases.find(x => x.id === caseId);
+          if (r.verdict === 'RESUELTO' && r.confidence === 'high' && c) {
+            patch.status = 'done';
+            patch.doneAt = Date.now();
+            autoMoved++;
+            // sync Slack ✅ + mark read
+            applyReactionsForTransition(c, 'todo', 'done');
+          }
+          patches.push({ caseId, patch });
+        }
+        if (patches.length > 0) persistPatches(patches);
+        setAiProgress(p => ({ ...p, done: p.done + batch.length }));
+      } catch (e) {
+        setAiProgress(p => ({ ...p, errors: p.errors + batch.length }));
+        console.warn('analyze fetch failed:', e);
+      }
+    }
+
+    setAiProgress(null);
+    setUndoAction({
+      id: Date.now(),
+      label: autoMoved > 0
+        ? `✓ Análisis IA · ${autoMoved} auto-movidas a Hecho`
+        : `✓ Análisis IA · badges actualizados`,
+      run: () => setUndoAction(null),
+    });
+  }, [cases, state.cases, persistPatches, applyReactionsForTransition]);
+
   // Auto-dismiss undo tras 6s
   useEffect(() => {
     if (!undoAction) return;
@@ -763,6 +838,13 @@ export default function Page() {
         .refresh-btn:disabled { opacity: 0.5; cursor: wait; }
         .logout-btn { background: transparent; border: none; color: var(--muted); padding: 6px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: color 0.15s, background 0.15s; }
         .logout-btn:hover { color: var(--ink); background: #f1f5f9; }
+        .ai-btn { background: linear-gradient(135deg, #a855f7 0%, #6366f1 100%); color: #fff; box-shadow: 0 1px 3px rgba(99,102,241,0.3); }
+        .ai-btn:hover { background: linear-gradient(135deg, #9333ea 0%, #4f46e5 100%); color: #fff; }
+        .ai-btn:disabled { opacity: 0.6; cursor: wait; }
+        .ai-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; padding: 2px 7px; border-radius: 999px; font-weight: 600; margin-left: 6px; }
+        .ai-badge.waiting-joan { background: #fef3c7; color: #92400e; }
+        .ai-badge.waiting-customer { background: #e0e7ff; color: #4338ca; }
+        .ai-badge.resolved { background: #d1fae5; color: #047857; }
 
         /* SEARCH */
         .search-box { display: flex; align-items: center; gap: 8px; background: #f1f5f9; border-radius: 10px; padding: 8px 14px; flex: 1; max-width: 460px; transition: background 0.15s, box-shadow 0.15s; }
@@ -920,6 +1002,14 @@ export default function Page() {
           </div>
           <a className="icon-btn" href="/admin" title="Gestión de usuarios">Usuarios</a>
           <a className="icon-btn" href="/manual" target="_blank" rel="noopener noreferrer" title="Manual de uso">Manual</a>
+          <button
+            className="icon-btn ai-btn"
+            onClick={analyzeAll}
+            disabled={!!aiProgress || loading}
+            title="Clasificar hilos de Por revisar con IA (resueltos → Hecho, resto → badge)"
+          >
+            {aiProgress ? `IA ${aiProgress.done}/${aiProgress.total}` : '✨ Revisar con IA'}
+          </button>
           <button className="refresh-btn" onClick={loadAll} disabled={loading}>
             {loading ? 'Cargando…' : 'Refrescar'}
           </button>
@@ -1032,6 +1122,14 @@ export default function Page() {
                               {c.category.key === 'acceso' ? 'Acceso' : c.category.key === 'reembolso' ? 'Reembolso' : 'Otro'}
                             </span>
                             <span className="channel-tag">#{channelLabel(c.channelId)}</span>
+                            {(() => {
+                              const v = state.cases[c.id]?.aiVerdict;
+                              const r = state.cases[c.id]?.aiReason;
+                              if (v === 'ESPERA_JOAN') return <span className="ai-badge waiting-joan" title={r || ''}>⚡ Tú</span>;
+                              if (v === 'ESPERA_CLIENTE') return <span className="ai-badge waiting-customer" title={r || ''}>⏳ Cliente</span>;
+                              if (v === 'RESUELTO') return <span className="ai-badge resolved" title={r || ''}>✓ IA</span>;
+                              return null;
+                            })()}
                           </span>
                           <span className={age.cls}>{age.text}</span>
                         </div>
