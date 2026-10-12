@@ -785,20 +785,21 @@ export default function Page() {
   // cada hilo (RESUELTO/ESPERA_JOAN/ESPERA_CLIENTE) y auto-mueve a Hecho
   // las resueltas con alta confianza. El resto se queda con un badge.
   const analyzeAll = useCallback(async () => {
-    const todoCases = cases.filter(c => {
+    const pendingCases = cases.filter(c => {
       const s = state.cases[c.id] || {};
-      return (s.status || 'todo') === 'todo' && !s.archived;
+      const st = s.status || 'todo';
+      return (st === 'todo' || st === 'doing') && !s.archived;
     });
-    if (todoCases.length === 0) {
+    if (pendingCases.length === 0) {
       setUndoAction({ id: Date.now(), label: 'Nada que analizar', run: () => setUndoAction(null) });
       return;
     }
-    setAiProgress({ done: 0, total: todoCases.length, errors: 0 });
+    setAiProgress({ done: 0, total: pendingCases.length, errors: 0 });
 
     const CHUNK = 10;
     let autoMoved = 0;
-    for (let i = 0; i < todoCases.length; i += CHUNK) {
-      const batch = todoCases.slice(i, i + CHUNK);
+    for (let i = 0; i < pendingCases.length; i += CHUNK) {
+      const batch = pendingCases.slice(i, i + CHUNK);
       try {
         const res = await fetch('/api/analyze', {
           method: 'POST',
@@ -830,10 +831,12 @@ export default function Page() {
           // los deja marcados para revisión manual).
           const c = cases.find(x => x.id === caseId);
           if (r.verdict === 'RESUELTO' && (r.confidence === 'high' || r.confidence === 'medium') && c) {
+            const prevStatus = state.cases[caseId]?.status || 'todo';
             patch.status = 'done';
             patch.doneAt = Date.now();
             autoMoved++;
-            applyReactionsForTransition(c, 'todo', 'done');
+            // Usa el estado actual real como "from" (todo o doing).
+            applyReactionsForTransition(c, prevStatus, 'done');
           }
           patches.push({ caseId, patch });
         }
