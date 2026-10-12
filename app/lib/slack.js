@@ -37,6 +37,19 @@ export function getChannelsConfig() {
   });
 }
 
+// Devuelve la lista efectiva de canales: KV si está configurado, env si no.
+// Import dinámico para evitar ciclo kv.js ↔ slack.js (si llega a existir).
+export async function getActiveChannels() {
+  try {
+    const kv = await import('./kv.js');
+    if (kv.isKvEnabled()) {
+      const list = await kv.getKvChannels();
+      if (Array.isArray(list) && list.length > 0) return list;
+    }
+  } catch (e) {}
+  return getChannelsConfig();
+}
+
 export function getMyUserId() {
   return process.env.MY_USER_ID || '';
 }

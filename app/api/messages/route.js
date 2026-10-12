@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { slackFetch, getChannelsConfig } from '../../lib/slack';
+import { slackFetch, getActiveChannels } from '../../lib/slack';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -10,9 +10,9 @@ export async function GET(request) {
   const days = parseInt(url.searchParams.get('days') || '14', 10);
   const oldest = Math.floor(Date.now() / 1000 - days * 86400);
 
-  const channels = getChannelsConfig();
+  const channels = await getActiveChannels();
   if (channels.length === 0) {
-    return NextResponse.json({ error: 'No channels configured in SLACK_CHANNELS' }, { status: 500 });
+    return NextResponse.json({ error: 'No hay canales configurados (ni KV ni SLACK_CHANNELS)' }, { status: 500 });
   }
 
   const results = await Promise.all(channels.map(async (ch) => {

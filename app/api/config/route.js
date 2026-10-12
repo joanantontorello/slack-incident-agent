@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getChannelsConfig, getMyUserId, getAutoDoneUserIds, slackFetch } from '../../lib/slack';
+import { getActiveChannels, getMyUserId, getAutoDoneUserIds, slackFetch } from '../../lib/slack';
 
 export const runtime = 'nodejs';
 
@@ -38,7 +38,7 @@ async function getChannelName(id) {
 
 export async function GET() {
   const team = await getTeam();
-  const channels = getChannelsConfig();
+  const channels = await getActiveChannels();
   const enriched = await Promise.all(channels.map(async c => ({
     ...c,
     name: await getChannelName(c.id),

@@ -5,6 +5,7 @@ const URL_ENV = 'KV_REST_API_URL';
 const TOKEN_ENV = 'KV_REST_API_TOKEN';
 const STATE_KEY = 'pipeline-state';
 const USERS_KEY = 'pipeline-users';
+const CHANNELS_KEY = 'pipeline-channels';
 
 export function isKvEnabled() {
   return !!(process.env[URL_ENV] && process.env[TOKEN_ENV]);
@@ -89,4 +90,28 @@ export async function removeKvUser(user) {
   const next = users.filter(u => u.user !== user);
   await kvSetJson(USERS_KEY, next);
   return next;
+}
+
+// ============ CHANNELS ============
+// Formato almacenado: [{id, filter}] donde filter es 'all' o 'mention'.
+// Si KV no tiene entrada, el sistema cae a la env SLACK_CHANNELS.
+export async function getKvChannels() {
+  if (!isKvEnabled()) return null;
+  const r = await kvCommand(['get', CHANNELS_KEY]);
+  if (!r || r.result == null) return null;
+  try {
+    const parsed = typeof r.result === 'string' ? JSON.parse(r.result) : r.result;
+    return Array.isArray(parsed) ? parsed : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export async function setKvChannels(channels) {
+  if (!isKvEnabled()) throw new Error('KV not configured');
+  const clean = (Array.isArray(channels) ? channels : [])
+    .map(c => ({ id: String(c.id || '').trim(), filter: c.filter === 'mention' ? 'mention' : 'all' }))
+    .filter(c => /^C[A-Z0-9]+$/.test(c.id));
+  await kvSetJson(CHANNELS_KEY, clean);
+  return clean;
 }

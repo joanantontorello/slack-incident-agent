@@ -37,6 +37,20 @@ const STYLES = `
   .error { background: #fef2f2; color: #991b1b; padding: 10px 14px; border-radius: 8px; font-size: 12.5px; margin-top: 12px; }
   .empty { color: #94a3b8; font-size: 13px; padding: 12px 0; font-style: italic; }
   .copied-tag { color: #047857; font-size: 11px; margin-left: 8px; }
+  .channel-list { display: flex; flex-direction: column; gap: 2px; max-height: 400px; overflow-y: auto; margin-top: 8px; padding-right: 4px; }
+  .channel-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; transition: background 0.1s; }
+  .channel-item:hover { background: #f8fafc; }
+  .channel-item input[type="checkbox"] { width: 16px; height: 16px; accent-color: #0068FF; cursor: pointer; }
+  .channel-item .name { font-weight: 500; color: #0f172a; flex: 1; font-size: 13px; }
+  .channel-item .name .lock { color: #94a3b8; font-size: 11px; margin-right: 4px; }
+  .channel-item .members { font-size: 11px; color: #94a3b8; }
+  .channel-item select { background: #f1f5f9; border: none; border-radius: 6px; padding: 4px 8px; font-size: 11.5px; color: #0f172a; cursor: pointer; }
+  .channel-item.disabled { opacity: 0.4; }
+  .channel-item.disabled select { opacity: 0.4; pointer-events: none; }
+  .channel-search { width: 100%; background: #f1f5f9; border: none; border-radius: 8px; padding: 10px 12px; font-size: 13px; color: #0f172a; outline: none; margin-top: 10px; }
+  .channel-search:focus { background: #fff; box-shadow: 0 0 0 2px #0068FF; }
+  .save-row { margin-top: 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .save-row .hint { font-size: 12px; color: #64748b; }
 `;
 
 export default function AdminPage() {
@@ -48,6 +62,14 @@ export default function AdminPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState('');
+  // Canales
+  const [chAvailable, setChAvailable] = useState([]);
+  const [chSelected, setChSelected] = useState({}); // {id: 'all'|'mention'}
+  const [chSource, setChSource] = useState(null); // 'kv' | 'env'
+  const [chAvailableError, setChAvailableError] = useState(null);
+  const [chSearch, setChSearch] = useState('');
+  const [chSaving, setChSaving] = useState(false);
+  const [chSavedTag, setChSavedTag] = useState('');
 
   const load = async () => {
     try {
@@ -61,7 +83,53 @@ export default function AdminPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  const loadChannels = async () => {
+    try {
+      const r = await fetch('/api/admin/channels', { cache: 'no-store' });
+      const data = await r.json();
+      setChAvailable(Array.isArray(data.availableChannels) ? data.availableChannels : []);
+      setChAvailableError(data.availableError || null);
+      setChSource(data.source || null);
+      // Combinar: cualquier canal activo pasa a "seleccionado" con su filter
+      const sel = {};
+      for (const c of (data.activeChannels || [])) sel[c.id] = c.filter || 'all';
+      setChSelected(sel);
+    } catch (e) {
+      setChAvailableError(String(e.message || e));
+    }
+  };
+
+  useEffect(() => { load(); loadChannels(); }, []);
+
+  const toggleChannel = (id) => {
+    setChSelected(prev => {
+      const next = { ...prev };
+      if (next[id]) delete next[id]; else next[id] = 'all';
+      return next;
+    });
+  };
+  const setChannelFilter = (id, filter) => {
+    setChSelected(prev => ({ ...prev, [id]: filter }));
+  };
+  const saveChannels = async () => {
+    setChSaving(true); setError('');
+    try {
+      const channels = Object.entries(chSelected).map(([id, filter]) => ({ id, filter }));
+      const r = await fetch('/api/admin/channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channels }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Error guardando');
+      setChSavedTag('✓ Guardado — refresca el dashboard para ver los nuevos canales');
+      setTimeout(() => setChSavedTag(''), 5000);
+      await loadChannels();
+    } catch (err) {
+      setError(String(err.message || err));
+    }
+    setChSaving(false);
+  };
 
   const add = async (e) => {
     e.preventDefault();
@@ -129,6 +197,70 @@ export default function AdminPage() {
         </div>
 
         <div className="admin-wrap">
+          <div className="card">
+            <h2>Canales monitorizados</h2>
+            <div className="h-sub">
+              Marca los canales de Slack cuyos hilos quieres que aparezcan en el dashboard.
+              {chSource === 'kv' ? ' Fuente actual: KV.' : ' Fuente actual: env SLACK_CHANNELS.'}
+            </div>
+
+            <input
+              type="text"
+              className="channel-search"
+              placeholder="Buscar canal por nombre…"
+              value={chSearch}
+              onChange={e => setChSearch(e.target.value)}
+            />
+
+            {chAvailableError && (
+              <div className="error" style={{ marginTop: 10 }}>
+                Error listando canales: {chAvailableError}. Comprueba que el bot tiene scope <code>channels:read</code> y <code>groups:read</code>.
+              </div>
+            )}
+
+            <div className="channel-list">
+              {chAvailable
+                .filter(c => !chSearch || (c.name || '').toLowerCase().includes(chSearch.toLowerCase()))
+                .map(c => {
+                  const checked = !!chSelected[c.id];
+                  return (
+                    <label key={c.id} className={`channel-item${checked ? '' : ' disabled'}`}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleChannel(c.id)}
+                      />
+                      <span className="name">
+                        <span className="lock">{c.is_private ? '🔒' : '#'}</span>
+                        {c.name}
+                      </span>
+                      <span className="members">{c.num_members} miembros</span>
+                      <select
+                        value={chSelected[c.id] || 'all'}
+                        onChange={e => setChannelFilter(c.id, e.target.value)}
+                      >
+                        <option value="all">Todos los hilos</option>
+                        <option value="mention">Solo menciones a ti</option>
+                      </select>
+                    </label>
+                  );
+                })}
+              {chAvailable.length === 0 && !chAvailableError && (
+                <div className="empty">Cargando canales disponibles…</div>
+              )}
+            </div>
+
+            <div className="save-row">
+              <span className="hint">
+                {Object.keys(chSelected).length} canales seleccionados
+                {chSavedTag && <span style={{ color: '#047857', marginLeft: 10 }}>{chSavedTag}</span>}
+              </span>
+              <button className="add-btn" onClick={saveChannels} disabled={chSaving}>
+                {chSaving ? 'Guardando…' : 'Guardar selección'}
+              </button>
+            </div>
+          </div>
+
           <div className="card">
             <h2>Usuarios con acceso</h2>
             <div className="h-sub">Cualquiera con estas credenciales puede entrar al dashboard.</div>
