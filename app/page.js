@@ -48,6 +48,54 @@ const EMOJI_MAP = {
   card_index: '📇', card_file_box: '🗃️', file_folder: '📁', open_file_folder: '📂',
   bookmark_tabs: '📑', spiral_notepad: '🗒️', dart: '🎯', chart: '💹', money_mouth_face: '🤑',
   green_apple: '🍏', apple: '🍎', hearts: '♥️', spades: '♠️', diamonds: '♦️', clubs: '♣️',
+  // Flechas y controles de reproducción
+  arrow_forward: '▶️', arrow_backward: '◀️', fast_forward: '⏩', rewind: '⏪',
+  arrow_double_up: '⏫', arrow_double_down: '⏬', play_pause: '⏯️', pause_button: '⏸️',
+  stop_button: '⏹️', record_button: '⏺️', eject_button: '⏏️', next_track_button: '⏭️',
+  previous_track_button: '⏮️', arrow_up_down: '↕️', left_right_arrow: '↔️',
+  arrow_upper_left: '↖️', arrow_upper_right: '↗️', arrow_lower_right: '↘️', arrow_lower_left: '↙️',
+  leftwards_arrow_with_hook: '↩️', arrow_right_hook: '↪️', twisted_rightwards_arrows: '🔀',
+  // Multimedia y producción
+  clapper: '🎬', film_strip: '🎞️', movie_camera: '🎥', camera: '📷', camera_flash: '📸',
+  video_camera: '📹', vhs: '📼', microphone: '🎤', studio_microphone: '🎙️',
+  musical_note: '🎵', notes: '🎶', musical_keyboard: '🎹', guitar: '🎸', drum: '🥁',
+  tv: '📺', radio: '📻', speaker: '🔈', mute: '🔇', sound: '🔉', loud_sound: '🔊',
+  mega: '📣', loudspeaker: '📢', art: '🎨', paintbrush: '🖌️', crayon: '🖍️',
+  // Comunicación y archivos
+  envelope_with_arrow: '📩', outbox_tray: '📤', inbox_tray: '📥',
+  incoming_envelope: '📨', mailbox: '📫', mailbox_closed: '📪', mailbox_with_mail: '📬',
+  mailbox_with_no_mail: '📭', newspaper: '📰', scroll: '📜', bookmark: '🔖',
+  label: '🏷️', closed_lock_with_key: '🔐', lock_with_ink_pen: '🔏', key_old: '🗝️',
+  // Negocio y datos
+  briefcase: '💼', office: '🏢', bank: '🏦', building_construction: '🏗️',
+  factory: '🏭', department_store: '🏬', convenience_store: '🏪',
+  receipt: '🧾', chart_decreasing: '📉', chart_increasing: '📈',
+  abacus: '🧮', bellhop_bell: '🛎️', calendar_spiral: '🗓️',
+  // Reloj
+  alarm_clock_old: '⏰', mantelpiece_clock: '🕰️', timer_clock: '⏲️',
+  clock2: '🕑', clock3: '🕒', clock4: '🕓', clock5: '🕔', clock6: '🕕',
+  clock7: '🕖', clock8: '🕗', clock9: '🕘', clock10: '🕙', clock11: '🕚', clock12: '🕛',
+  // Personas y gestos
+  man: '👨', woman: '👩', boy: '👦', girl: '👧', baby: '👶',
+  older_man: '👴', older_woman: '👵', police_officer: '👮', construction_worker: '👷',
+  // Transporte
+  car: '🚗', taxi: '🚕', bus: '🚌', truck: '🚚', airplane: '✈️', train: '🚆',
+  bicycle: '🚲', motorcycle: '🏍️', ship: '🚢', rocket_launch: '🚀',
+  // Objetos variados muy comunes
+  gem: '💎', balloon: '🎈', birthday: '🎂', wrapped_gift: '🎁',
+  party_popper: '🎉', snowflake: '❄️', sun_with_face: '🌞', sunny: '☀️',
+  umbrella: '☂️', coffee: '☕', beer: '🍺', beers: '🍻', wine_glass: '🍷',
+  cocktail: '🍸', pizza: '🍕', hamburger: '🍔', fries: '🍟', hot_dog: '🌭',
+  // Signos
+  copyright: '©️', registered: '®️', tm: '™️',
+  arrows_counterclockwise: '🔃', arrows_clockwise: '🔃',
+  no_mobile_phones: '📵', calling: '📲', signal_strength: '📶',
+  battery: '🔋', electric_plug: '🔌', wrench_tool: '🔧',
+  // Nuevos / aspectos del Mac/producto
+  gear_fine: '⚙️', hammer_and_wrench: '🛠️', toolbox: '🧰', nut_and_bolt: '🔩',
+  magnet: '🧲', test_tube: '🧪', petri_dish: '🧫', dna: '🧬',
+  // Métricas y actividad
+  trending_up: '📈', trending_down: '📉', clipboard_list: '📋',
 };
 
 // ============ HELPERS ============
@@ -133,7 +181,10 @@ function shortenText(s, n, users) {
        .replace(/<!here>/g, '@here')
        .replace(/<((https?:[^|>]+))\|([^>]+)>/g, '$3')
        .replace(/<(https?:[^>]+)>/g, '$1')
-       .replace(/:([a-z0-9_+-]+):/g, (m, name) => EMOJI_MAP[name] || m)
+       // Emoji conocido → unicode. Desconocido (custom workspace) → se
+       // quita para que no aparezcan títulos como "arrow_forward" o
+       // ":clapper: Página semana de transformación".
+       .replace(/:([a-z0-9_+-]+):/g, (m, name) => EMOJI_MAP[name] || '')
        .replace(/\s+/g, ' ')
        .trim();
   return s.length > n ? s.slice(0, n).trim() + '…' : s;
