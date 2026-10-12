@@ -306,14 +306,14 @@ export default function Page() {
   }, [sharedMode]);
 
   const channelLabel = useCallback((id) => {
-    const map = {
-      'C0A0W5N0LUC': 'incidencias-pagos',
-      'C097D0JTL48': 'administración',
-      'C096QADCNMQ': 'general',
-    };
     if (!id) return 'canal';
-    return map[id] || String(id).slice(-4);
-  }, []);
+    const c = (config.channels || []).find(x => x.id === id);
+    if (c && c.name) {
+      // Alias para los antiguos "división-ventas-*" (mantener la UI corta)
+      return c.name.replace(/^división-ventas-/, '');
+    }
+    return String(id).slice(-4);
+  }, [config.channels]);
 
   const showToast = useCallback((msg, kind = 'info') => {
     setToast({ msg, kind, id: Date.now() });
@@ -917,7 +917,8 @@ export default function Page() {
         .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
         /* PILL TOGGLE GROUP — estilo recobros: contenedor blanco, activo azul */
-        .pill-group { display: inline-flex; background: #fff; border-radius: 12px; padding: 4px; gap: 2px; box-shadow: 0 1px 3px rgba(15,23,42,0.06), 0 0 0 1px rgba(15,23,42,0.04); }
+        .pill-group { display: inline-flex; background: #fff; border-radius: 12px; padding: 4px; gap: 2px; box-shadow: 0 1px 3px rgba(15,23,42,0.06), 0 0 0 1px rgba(15,23,42,0.04); flex-wrap: wrap; max-width: 100%; }
+        .channel-row { padding: 10px 22px; background: #fff; border-bottom: 1px solid var(--border); overflow-x: auto; }
         .pill-group button { background: transparent; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; color: var(--muted); cursor: pointer; font-weight: 500; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; }
         .pill-group button:hover { color: var(--ink); }
         .pill-group button.active { background: var(--brand); color: #fff; font-weight: 600; box-shadow: 0 1px 3px rgba(0,104,255,0.35); }
@@ -1084,14 +1085,6 @@ export default function Page() {
           </div>
         </div>
         <div className="header-right">
-          <div className="pill-group">
-            <button className={activeFilter === 'all' ? 'active' : ''} onClick={() => setActiveFilter('all')}>Todos</button>
-            {config.channels.map(c => (
-              <button key={c.id} className={activeFilter === c.id ? 'active' : ''} onClick={() => setActiveFilter(c.id)}>
-                {channelLabel(c.id)}
-              </button>
-            ))}
-          </div>
           <a className="icon-btn" href="/admin" title="Gestión de usuarios">Usuarios</a>
           <a className="icon-btn" href="/manual" target="_blank" rel="noopener noreferrer" title="Manual de uso">Manual</a>
           <button
@@ -1120,6 +1113,17 @@ export default function Page() {
               <line x1="15" y1="12" x2="3" y2="12"/>
             </svg>
           </button>
+        </div>
+      </div>
+
+      <div className="channel-row">
+        <div className="pill-group">
+          <button className={activeFilter === 'all' ? 'active' : ''} onClick={() => setActiveFilter('all')}>Todos</button>
+          {config.channels.map(c => (
+            <button key={c.id} className={activeFilter === c.id ? 'active' : ''} onClick={() => setActiveFilter(c.id)}>
+              {channelLabel(c.id)}
+            </button>
+          ))}
         </div>
       </div>
 
