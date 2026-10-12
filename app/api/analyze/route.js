@@ -5,7 +5,10 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const MODEL = 'claude-haiku-5-5';
+// Modelo configurable vía env ANTHROPIC_MODEL. Default Sonnet 5.5:
+// mejor sweet spot calidad/coste para clasificar hilos en castellano.
+// Alternativas: claude-haiku-5-5 (más barato) · claude-opus-5-5 (overkill).
+const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 
 const SYSTEM_PROMPT = `Eres un asistente para Joan Anton Torelló (COO de Instituto de Comunicación — ICO).
