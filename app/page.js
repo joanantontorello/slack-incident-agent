@@ -677,6 +677,23 @@ export default function Page() {
         persistPatchesRef.current(patches);
       }
 
+      // Inicializar lastViewedTs para tarjetas engageadas sin baseline.
+      // Esto hace que las tarjetas antiguas en "En progreso" o "Por
+      // revisar" empiecen a tracking de mensajes nuevos desde este
+      // momento (sin bombardearte con puntos azules retroactivos).
+      const initPatches = [];
+      for (const c of allCases) {
+        const prev = baseCases[c.id] || {};
+        if (prev.lastViewedTs) continue;
+        if (prev.archived) continue;
+        if (prev.status === 'done') continue;
+        if (!c.lastMessageTs) continue;
+        initPatches.push({ caseId: c.id, patch: { lastViewedTs: c.lastMessageTs } });
+      }
+      if (initPatches.length > 0 && persistPatchesRef.current) {
+        persistPatchesRef.current(initPatches);
+      }
+
       if (!silent) {
         // Solo actualizamos "última visita" en refresh manual — así el
         // auto-refresh puede traer nuevos y mantener el puntito azul.
@@ -720,16 +737,17 @@ export default function Page() {
     setModalLoading(true);
     setModalMessages([]);
     setModalUsers({});
-    // Marcar como leído: lastViewedTs = ts del último mensaje del hilo
-    if (c.lastMessageTs) {
-      persistPatchesRef.current && persistPatchesRef.current([
-        { caseId: c.id, patch: { lastViewedTs: c.lastMessageTs } },
-      ]);
-    }
     try {
       const r = await fetch(`/api/thread?channel=${c.channelId}&ts=${c.ts}`).then(r => r.json());
       const msgs = Array.isArray(r.messages) ? r.messages : [];
       setModalMessages(msgs);
+      // Marcar como leído con el ts REAL del último mensaje del hilo
+      // (post-fetch — así captura mensajes llegados después del último
+      // loadAll que acabas de ver en pantalla).
+      const latest = msgs.length > 0 ? parseFloat(msgs[msgs.length - 1].ts || c.ts) : (c.lastMessageTs || parseFloat(c.ts));
+      persistPatchesRef.current && persistPatchesRef.current([
+        { caseId: c.id, patch: { lastViewedTs: latest } },
+      ]);
       // Recolectar autores + menciones <@U…> dentro del texto
       const idSet = new Set();
       const re = /<@([A-Z0-9]+)(?:\|[^>]+)?>/g;
