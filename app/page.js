@@ -550,6 +550,7 @@ export default function Page() {
             id: `${f.channel}-${f.ts}`,
             channelId: f.channel,
             ts: f.ts,
+            lastMessageTs: parseFloat(lastMsg.ts || f.ts),
             title: extractTitle(rootText, users) || '(sin título)',
             summary: shortenText(rootText, 180, users),
             lastUser: users[lastUserId] || lastUserId || 'desconocido',
@@ -640,6 +641,7 @@ export default function Page() {
               id: r.id,
               channelId: r.channel,
               ts: r.ts,
+              lastMessageTs: parseFloat(lastMsg.ts || r.ts),
               title: extractTitle(rootText, users) || '(sin título)',
               summary: shortenText(rootText, 180, users),
               lastUser: users[lastUserId] || lastUserId || 'desconocido',
@@ -718,6 +720,12 @@ export default function Page() {
     setModalLoading(true);
     setModalMessages([]);
     setModalUsers({});
+    // Marcar como leído: lastViewedTs = ts del último mensaje del hilo
+    if (c.lastMessageTs) {
+      persistPatchesRef.current && persistPatchesRef.current([
+        { caseId: c.id, patch: { lastViewedTs: c.lastMessageTs } },
+      ]);
+    }
     try {
       const r = await fetch(`/api/thread?channel=${c.channelId}&ts=${c.ts}`).then(r => r.json());
       const msgs = Array.isArray(r.messages) ? r.messages : [];
@@ -785,9 +793,15 @@ export default function Page() {
     const prev = state.cases[caseId] || {};
     const prevStatus = prev.status || 'todo';
     if (prevStatus === status) return;
-    const patch = { status, ...(status === 'done' ? { doneAt: Date.now() } : {}) };
-    persistPatches([{ caseId, patch }]);
     const c = cases.find(x => x.id === caseId);
+    // Al cambiar de estado también marcamos como leído (acabas de
+    // engagear activamente con la tarjeta).
+    const patch = {
+      status,
+      ...(status === 'done' ? { doneAt: Date.now() } : {}),
+      ...(c?.lastMessageTs ? { lastViewedTs: c.lastMessageTs } : {}),
+    };
+    persistPatches([{ caseId, patch }]);
     if (!c) return;
     applyReactionsForTransition(c, prevStatus, status);
     const label = status === 'done' ? 'Movida a Hecho' : status === 'doing' ? 'Movida a En progreso' : 'Movida a Por revisar';
@@ -1045,6 +1059,10 @@ export default function Page() {
         .card.waiting:hover { box-shadow: 0 4px 14px rgba(15,23,42,0.08), inset 3px 0 0 #f59e0b, 0 0 0 1px rgba(15,23,42,0.06); }
         .card.is-new::before { content: ''; position: absolute; top: 12px; right: 12px; width: 8px; height: 8px; border-radius: 50%; background: var(--brand); box-shadow: 0 0 0 3px #fff; }
         .card.is-new .card-meta { padding-right: 16px; }
+        /* "Mensajes nuevos" tipo WhatsApp — mayor y azul más saturado */
+        .card.has-unread::after { content: ''; position: absolute; top: 10px; right: 10px; width: 10px; height: 10px; border-radius: 50%; background: #0068FF; box-shadow: 0 0 0 3px #fff, 0 2px 6px rgba(0,104,255,0.4); }
+        .card.has-unread .card-meta { padding-right: 20px; }
+        .card.has-unread .card-title { font-weight: 700; }
         .card-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px; font-size: 11px; color: var(--muted); }
         .card-meta .left { display: inline-flex; align-items: center; gap: 6px; }
         .cat-tag { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.3px; }
@@ -1264,7 +1282,12 @@ export default function Page() {
                   ) : items.map(c => {
                     const age = ageFromTs(c.ts);
                     return (
-                      <div key={c.id} className={`card${c.waitingForMe ? ' waiting' : ''}${lastSeenTs && parseFloat(c.ts) > lastSeenTs ? ' is-new' : ''}`} onClick={() => openModal(c)}>
+                      <div key={c.id} className={(() => {
+                        const sc = state.cases[c.id] || {};
+                        const hasUnread = sc.lastViewedTs && c.lastMessageTs && c.lastMessageTs > sc.lastViewedTs;
+                        const isNew = lastSeenTs && parseFloat(c.ts) > lastSeenTs;
+                        return `card${c.waitingForMe ? ' waiting' : ''}${hasUnread ? ' has-unread' : isNew ? ' is-new' : ''}`;
+                      })()} onClick={() => openModal(c)}>
                         <div className="card-meta">
                           <span className="left">
                             <span className={`cat-tag ${c.category.key}`}>
