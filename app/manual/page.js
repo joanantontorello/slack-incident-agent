@@ -82,6 +82,7 @@ const STYLES = `
         .badge-acceso { background: #fee2e2; color: #b91c1c; }
         .badge-otro { background: #e0e7ff; color: #4338ca; }
         hr { border: none; border-top: 1px solid #e2e8f0; margin: 32px 0; }
+        h2[id] { scroll-margin-top: 64px; }
         .footer-note {
           margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0;
           font-size: 12px; color: #94a3b8; text-align: center;
@@ -192,6 +193,35 @@ export default function ManualPage() {
           <li><b>↻ Refrescar:</b> vuelve a leer Slack. No hay auto-refresco todavía.</li>
           <li><b>🗑 Archivar todos:</b> en la columna Hecho, archiva todas las cerradas de golpe.</li>
         </ul>
+
+        <h2 id="mensajes-privados">Mensajes privados</h2>
+        <p>
+          El panel también puede enseñar los <b>mensajes privados nuevos</b> que
+          te llegan en Slack (de una persona o de un grupo privado). Cada
+          conversación es una tarjeta más del tablero y se filtra con el botón
+          <b> Mensajes privados</b>, junto a los canales. Si el último mensaje es
+          de otra persona, sale en <b>Espera mi respuesta</b>; cuando contestas,
+          deja de esperar. Si te vuelven a escribir en una conversación que
+          tenías en Hecho, vuelve sola a <b>Por revisar</b>.
+        </p>
+        <p>
+          Solo salen los mensajes que lleguen a partir del día en que se activa,
+          no los antiguos. Para que funcione hay que dar permiso al panel en
+          Slack una sola vez:
+        </p>
+        <ol>
+          <li>Entra en <a href="https://api.slack.com/apps" target="_blank" rel="noopener noreferrer">api.slack.com/apps</a> con tu cuenta de Slack.</li>
+          <li>Abre la app del panel, que se llama <b>«ICO Pipeline Bot»</b>.</li>
+          <li>En el menú de la izquierda, entra en <b>«OAuth &amp; Permissions»</b>. Baja hasta <b>«User Token Scopes»</b> y, con el botón <b>«Add an OAuth Scope»</b>, añade uno a uno estos cuatro: <code>im:read</code>, <code>im:history</code>, <code>mpim:read</code> y <code>mpim:history</code>.</li>
+          <li>Sube al principio de esa misma página, pulsa <b>«Reinstall to Workspace»</b> y acepta.</li>
+          <li>En esa misma página, copia el <b>«User OAuth Token»</b> (empieza por <code>xoxp-</code>). Es como una contraseña: no lo pegues en ningún chat.</li>
+          <li>En Vercel, entra en el proyecto del panel › <b>Settings</b> › <b>Environment Variables</b>. Cambia el valor de <code>SLACK_USER_TOKEN</code> por el token nuevo y guarda. Después vuelve a publicar: <b>Deployments</b> › en el primero de la lista, los tres puntos › <b>Redeploy</b>.</li>
+        </ol>
+        <div className="callout ok">
+          Cuando termine de publicarse, recarga el panel: el aviso amarillo de
+          arriba desaparece y los privados nuevos empiezan a salir desde ese
+          momento.
+        </div>
 
         <h2>Auto-promoción por reacción</h2>
         <p>

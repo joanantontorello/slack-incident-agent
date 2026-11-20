@@ -6,6 +6,7 @@ const TOKEN_ENV = 'KV_REST_API_TOKEN';
 const STATE_KEY = 'pipeline-state';
 const USERS_KEY = 'pipeline-users';
 const CHANNELS_KEY = 'pipeline-channels';
+const DM_SINCE_KEY = 'pipeline-dm-since';
 
 export function isKvEnabled() {
   return !!(process.env[URL_ENV] && process.env[TOKEN_ENV]);
@@ -114,4 +115,28 @@ export async function setKvChannels(channels) {
     .filter(c => /^C[A-Z0-9]+$/.test(c.id));
   await kvSetJson(CHANNELS_KEY, clean);
   return clean;
+}
+
+// ============ MENSAJES PRIVADOS ============
+// Fecha (segundos epoch) desde la que el panel enseña mensajes privados.
+// Se guarda una sola vez (la primera vez que /api/dms consigue leerlos),
+// así nunca se cuela el historial anterior.
+export async function getDmSince() {
+  if (!isKvEnabled()) return null;
+  const r = await kvCommand(['get', DM_SINCE_KEY]);
+  const n = r && r.result != null ? Number(r.result) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+// Guarda la fecha solo si aún no existe (SET … NX): si llegan dos
+// peticiones a la vez se queda la primera. Devuelve el valor guardado.
+export async function initDmSince(seconds) {
+  if (!isKvEnabled()) return null;
+  const value = String(Math.floor(seconds));
+  await kvCommand(['set', DM_SINCE_KEY, value, 'NX']);
+  const saved = await getDmSince();
+  if (saved) return saved;
+  // Había algo ilegible en la clave: se sobrescribe.
+  await kvCommand(['set', DM_SINCE_KEY, value]);
+  return Number(value);
 }

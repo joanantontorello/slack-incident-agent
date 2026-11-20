@@ -288,6 +288,67 @@ function formatTs(ts) {
   return d.toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
+// ============ MENSAJES PRIVADOS ============
+// Cada conversación privada (DM 1 a 1 o grupo privado) es UNA tarjeta con
+// id estable «dm:<canal>»: no cambia aunque lleguen mensajes nuevos, así
+// conserva su columna y el estado compartido no crece con cada mensaje.
+const DM_FILTER = 'dms';
+const DM_CATEGORY = { key: 'dm', label: '✉️ Privado', cls: 'badge-dm' };
+
+function isDmCaseId(id) {
+  return typeof id === 'string' && id.startsWith('dm:');
+}
+
+function firstName(name) {
+  return String(name || '').trim().split(/\s+/)[0] || '';
+}
+
+function dmTitle(d) {
+  if (d.type === 'mpim') {
+    const names = (Array.isArray(d.members) ? d.members : [])
+      .map(m => firstName(m && (m.name || m.id)))
+      .filter(Boolean);
+    if (names.length === 0) return 'Grupo privado';
+    return names.length > 3 ? `${names.slice(0, 3).join(', ')} y ${names.length - 3} más` : names.join(', ');
+  }
+  return d.userName || d.userId || 'Mensaje privado';
+}
+
+function buildDmCase(d, users) {
+  const preview = shortenText(d.lastText, 150, users);
+  const lastName = d.lastFromMe ? 'Tú' : (d.lastUserName || users[d.lastUserId] || d.lastUserId || '');
+  let lastLine = preview;
+  if (d.lastFromMe) lastLine = `Tú: ${preview}`;
+  else if (d.type === 'mpim' && lastName) lastLine = `${firstName(lastName)}: ${preview}`;
+  // Para el modal: el último mensaje que te llegó y, si ya contestaste, tu respuesta.
+  const dmMessages = [{ ts: d.lastIncomingTs, user: d.lastIncomingUserId, text: d.lastIncomingText }];
+  if (d.lastTs && d.lastTs !== d.lastIncomingTs) {
+    dmMessages.push({ ts: d.lastTs, user: d.lastUserId, text: d.lastText });
+  }
+  return {
+    id: `dm:${d.channel}`,
+    isDm: true,
+    dmType: d.type === 'mpim' ? 'mpim' : 'im',
+    channelId: d.channel,
+    // Antigüedad y orden: desde cuándo espera respuesta (o el último mensaje recibido).
+    ts: String(d.waiting && d.waitingSinceTs ? d.waitingSinceTs : d.lastIncomingTs),
+    // «Mensajes nuevos» (puntito azul): solo cuenta lo que te escriben, no tus respuestas.
+    lastMessageTs: parseFloat(d.lastIncomingTs),
+    title: dmTitle(d),
+    summary: shortenText(d.lastIncomingText, 180, users),
+    lastUser: lastName,
+    lastText: lastLine,
+    category: DM_CATEGORY,
+    waitingForMe: !!d.waiting,
+    checkedByMe: false,
+    link: d.link,
+    deepLink: null,
+    replyCount: dmMessages.length - 1,
+    dmMessages,
+    dmUsers: users,
+  };
+}
+
 // ============ MAIN COMPONENT ============
 export default function Page() {
   const [cases, setCases] = useState([]);
@@ -309,6 +370,8 @@ export default function Page() {
   const [undoAction, setUndoAction] = useState(null);
   const [lastSeenTs, setLastSeenTs] = useState(0);
   const [aiProgress, setAiProgress] = useState(null); // {done, total, errors}
+  const [dmsInfo, setDmsInfo] = useState({ error: null, since: null }); // estado de /api/dms
+  const dmsSeqRef = useRef(0);
 
   // Inicialización del estado: intenta KV; si no, localStorage.
   // Migración: si KV está vacío y localStorage tiene datos, los sube
@@ -401,12 +464,94 @@ export default function Page() {
   const persistPatchesRef = useRef();
   useEffect(() => { persistPatchesRef.current = persistPatches; }, [persistPatches]);
 
+  // Mensajes privados: se piden a la vez que los canales y se pintan en
+  // cuanto llegan, sin hacer esperar al resto del tablero. Si /api/dms
+  // falla por algo pasajero, se quedan las tarjetas de la carga anterior.
+  const loadDms = useCallback(async () => {
+    const seq = ++dmsSeqRef.current;
+    let res;
+    try {
+      res = await fetch('/api/dms', { cache: 'no-store' }).then(r => r.json());
+    } catch (e) {
+      res = { dms: [], error: 'fetch_failed', detail: String(e.message || e) };
+    }
+    if (seq !== dmsSeqRef.current) return; // ya hay una carga más nueva en marcha
+    const errorCode = (res && res.error) || null;
+    setDmsInfo(prev => ({ error: errorCode, since: (res && res.since) || prev.since || null }));
+    if (errorCode && errorCode !== 'missing_scope') {
+      console.warn('[dashboard] mensajes privados:', errorCode, (res && res.detail) || '');
+      return;
+    }
+    const list = Array.isArray(res && res.dms) ? res.dms : [];
+
+    // Nombres: los que ya trae /api/dms + menciones <@U…> dentro de los textos.
+    const users = {};
+    const mentionIds = new Set();
+    const re = /<@([A-Z0-9]+)(?:\|[^>]+)?>/g;
+    for (const d of list) {
+      if (!d) continue;
+      for (const m of (Array.isArray(d.members) ? d.members : [])) {
+        if (m && m.id && m.name) users[m.id] = m.name;
+      }
+      if (d.userId && d.userName) users[d.userId] = d.userName;
+      if (d.lastUserId && d.lastUserName) users[d.lastUserId] = d.lastUserName;
+      if (d.lastIncomingUserId && d.lastIncomingUserName) users[d.lastIncomingUserId] = d.lastIncomingUserName;
+      for (const t of [d.lastText, d.lastIncomingText]) {
+        if (!t) continue;
+        let mm; while ((mm = re.exec(t)) !== null) mentionIds.add(mm[1]);
+      }
+    }
+    const missingIds = Array.from(mentionIds).filter(id => !users[id]);
+    if (missingIds.length > 0) {
+      try {
+        const ur = await fetch(`/api/users?ids=${missingIds.join(',')}`).then(r => r.json());
+        Object.assign(users, ur.users || {});
+      } catch (e) {}
+      if (seq !== dmsSeqRef.current) return;
+    }
+
+    const dmCases = [];
+    for (const d of list) {
+      try {
+        if (!d || !d.channel || !d.lastIncomingTs) continue;
+        dmCases.push(buildDmCase(d, users));
+      } catch (err) {
+        console.error('Error procesando mensaje privado', d && d.channel, err);
+      }
+    }
+    setCases(prev => [...prev.filter(c => !c.isDm), ...dmCases]);
+
+    // Estado: misma base de «leído» que los hilos + reapertura automática.
+    const baseCases = (sharedModeRef.current ? stateRef.current.cases : (loadState().cases || {}));
+    const patches = [];
+    for (const c of dmCases) {
+      const prev = baseCases[c.id] || {};
+      if (prev.status === 'done' || prev.archived) {
+        // Estaba en Hecho (o archivada) y ha llegado un mensaje nuevo que
+        // espera tu respuesta → vuelve sola a «Por revisar».
+        const closedAt = prev.doneAt ? prev.doneAt / 1000 : (prev.lastViewedTs || 0);
+        if (c.waitingForMe && c.lastMessageTs > closedAt) {
+          patches.push({ caseId: c.id, patch: { status: 'todo', archived: false, reopenedAt: Date.now() } });
+        }
+        continue;
+      }
+      if (!prev.lastViewedTs && c.lastMessageTs) {
+        patches.push({ caseId: c.id, patch: { lastViewedTs: c.lastMessageTs } });
+      }
+    }
+    if (patches.length > 0 && persistPatchesRef.current) {
+      persistPatchesRef.current(patches);
+    }
+  }, []);
+
   const loadAll = useCallback(async ({ silent = false } = {}) => {
     if (!silent) {
       setLoading(true);
       setProgress('Leyendo canales…');
     }
     setError(null);
+    // Privados en paralelo (loadDms es estable: useCallback sin dependencias).
+    loadDms().catch(e => console.warn('[dashboard] mensajes privados:', e));
     try {
       const cfgRes = await fetch('/api/config').then(r => r.json());
       setConfig(cfgRes);
@@ -576,6 +721,7 @@ export default function Page() {
       const toRecover = Object.entries(baseCasesForRecover)
         .filter(([id, s]) => {
           if (builtIds.has(id)) return false;
+          if (isDmCaseId(id)) return false; // los privados vienen de /api/dms, no son hilos
           if (s.archived) return false;
           const st = s.status || 'todo';
           return st === 'todo' || st === 'doing';
@@ -660,7 +806,8 @@ export default function Page() {
         }
       }
 
-      setCases(allCases);
+      // Las tarjetas de privados las gestiona loadDms: se conservan tal cual.
+      setCases(prev => [...allCases, ...prev.filter(c => c.isDm)]);
 
       // Auto-promoción a "done" — usa refs para leer sharedMode/state/persist
       // actuales (no los del cierre inicial de loadAll).
@@ -733,6 +880,17 @@ export default function Page() {
   }, [loadAll, loading]);
 
   const openModal = useCallback(async (c) => {
+    if (c && c.isDm) {
+      // El bot no puede leer los privados: se enseña lo que ya trajo /api/dms.
+      setModalCase(c);
+      setModalMessages(Array.isArray(c.dmMessages) ? c.dmMessages : []);
+      setModalUsers(c.dmUsers || {});
+      setModalLoading(false);
+      persistPatchesRef.current && persistPatchesRef.current([
+        { caseId: c.id, patch: { lastViewedTs: c.lastMessageTs } },
+      ]);
+      return;
+    }
     setModalCase(c);
     setModalLoading(true);
     setModalMessages([]);
@@ -779,6 +937,8 @@ export default function Page() {
 
   const syncReaction = useCallback(async (c, { emoji, undo = false, markRead = false }) => {
     if (!c || !c.channelId || !c.ts) return;
+    // En los privados no se ponen 👀 / ✅: la otra persona las vería.
+    if (c.isDm) return;
     try {
       const res = await fetch('/api/react', {
         method: 'POST',
@@ -869,6 +1029,7 @@ export default function Page() {
   // las resueltas con alta confianza. El resto se queda con un badge.
   const analyzeAll = useCallback(async () => {
     const pendingCases = cases.filter(c => {
+      if (c.isDm) return false; // la IA solo revisa hilos de canales
       const s = state.cases[c.id] || {};
       const st = s.status || 'todo';
       return (st === 'todo' || st === 'doing') && !s.archived;
@@ -962,14 +1123,16 @@ export default function Page() {
       (c.lastUser && c.lastUser.toLowerCase().includes(textQuery))
     );
   };
+  const matchesChannel = (c) => activeFilter === 'all' ||
+    (activeFilter === DM_FILTER ? !!c.isDm : c.channelId === activeFilter);
   const filtered = cases.filter(c =>
-    (activeFilter === 'all' || c.channelId === activeFilter) &&
+    matchesChannel(c) &&
     (activeCategory === 'all' || c.category.key === activeCategory) &&
     (!onlyWaiting || c.waitingForMe) &&
     matchesSearch(c)
   );
   const categoryCounts = cases
-    .filter(c => activeFilter === 'all' || c.channelId === activeFilter)
+    .filter(matchesChannel)
     .reduce((acc, c) => { acc[c.category.key] = (acc[c.category.key] || 0) + 1; return acc; }, {});
   const buckets = { todo: [], doing: [], done: [] };
   const archived = [];
@@ -1091,6 +1254,12 @@ export default function Page() {
         .cat-tag.acceso    .dot { background: #dc2626; }
         .cat-tag.reembolso .dot { background: #ea580c; }
         .cat-tag.otro      .dot { background: #6366f1; }
+        .cat-tag.dm        { color: #0f766e; }
+        .cat-tag.dm        .dot { background: #14b8a6; }
+        .card-summary.dm-preview { margin: 4px 0 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .dm-notice { background: #fefce8; color: #854d0e; padding: 8px 22px; font-size: 12.5px; border-top: 1px solid #fef08a; border-bottom: 1px solid #fef08a; }
+        .dm-notice a { color: #854d0e; font-weight: 600; }
+        .modal-note { font-size: 12px; color: var(--muted); margin-top: 10px; }
         .channel-tag { color: var(--muted); font-weight: 500; }
         .card-title { font-weight: 600; font-size: 13.5px; margin: 2px 0 0; line-height: 1.35; word-break: break-word; color: var(--ink); }
         .card-summary { font-size: 12px; color: #64748b; margin-bottom: 10px; line-height: 1.45; word-break: break-word; }
@@ -1206,6 +1375,13 @@ export default function Page() {
         </div>
       </div>
 
+      {dmsInfo.error === 'missing_scope' && (
+        <div className="dm-notice">
+          Para ver tus mensajes privados falta darle permiso al panel en Slack.{' '}
+          <a href="/manual#mensajes-privados" target="_blank" rel="noopener noreferrer">Cómo hacerlo</a>
+        </div>
+      )}
+
       <div className="channel-row">
         <div className="pill-group">
           <button className={activeFilter === 'all' ? 'active' : ''} onClick={() => setActiveFilter('all')}>Todos</button>
@@ -1214,6 +1390,13 @@ export default function Page() {
               {channelLabel(c.id)}
             </button>
           ))}
+          <button
+            className={activeFilter === DM_FILTER ? 'active' : ''}
+            onClick={() => setActiveFilter(DM_FILTER)}
+            title={dmsInfo.since ? `Mensajes privados nuevos desde el ${formatTs(dmsInfo.since)}` : 'Mensajes privados y grupos privados'}
+          >
+            Mensajes privados
+          </button>
         </div>
       </div>
 
@@ -1308,11 +1491,20 @@ export default function Page() {
                       })()} onClick={() => openModal(c)}>
                         <div className="card-meta">
                           <span className="left">
-                            <span className={`cat-tag ${c.category.key}`}>
-                              <span className="dot" />
-                              {c.category.key === 'acceso' ? 'Acceso' : c.category.key === 'reembolso' ? 'Reembolso' : 'Otro'}
-                            </span>
-                            <span className="channel-tag">#{channelLabel(c.channelId)}</span>
+                            {c.isDm ? (
+                              <span className="cat-tag dm">
+                                <span className="dot" />
+                                {c.dmType === 'mpim' ? 'Grupo privado' : 'Privado'}
+                              </span>
+                            ) : (
+                              <>
+                                <span className={`cat-tag ${c.category.key}`}>
+                                  <span className="dot" />
+                                  {c.category.key === 'acceso' ? 'Acceso' : c.category.key === 'reembolso' ? 'Reembolso' : 'Otro'}
+                                </span>
+                                <span className="channel-tag">#{channelLabel(c.channelId)}</span>
+                              </>
+                            )}
                             {(() => {
                               const v = state.cases[c.id]?.aiVerdict;
                               const conf = state.cases[c.id]?.aiConfidence;
@@ -1326,8 +1518,9 @@ export default function Page() {
                           <span className={age.cls}>{age.text}</span>
                         </div>
                         <div className="card-title">{c.title}</div>
+                        {c.isDm && c.lastText && <div className="card-summary dm-preview">{c.lastText}</div>}
                         <div className="card-actions" onClick={(e) => e.stopPropagation()}>
-                          <a className="btn btn-primary" href={c.deepLink || c.link} target="slack-thread" rel="noopener noreferrer">Ver hilo</a>
+                          <a className="btn btn-primary" href={c.deepLink || c.link} target="slack-thread" rel="noopener noreferrer">{c.isDm ? 'Abrir chat' : 'Ver hilo'}</a>
                           {colKey === 'todo' && (
                             <>
                               <button className="btn" onClick={() => setCaseStatus(c.id, 'doing')}>En progreso</button>
@@ -1384,9 +1577,18 @@ export default function Page() {
               <div style={{ minWidth: 0 }}>
                 <h2>{modalCase.title}</h2>
                 <div className="meta">
-                  <span className={`badge ${modalCase.category.cls}`}>{modalCase.category.label}</span>{' '}
-                  <span className="channel-tag">#{channelLabel(modalCase.channelId)}</span>
-                  {' · '}{modalMessages.length || modalCase.replyCount + 1} mensajes
+                  {modalCase.isDm ? (
+                    <>
+                      <span className="cat-tag dm"><span className="dot" />{modalCase.dmType === 'mpim' ? 'Grupo privado' : 'Mensaje privado'}</span>
+                      {' · '}{modalCase.waitingForMe ? 'Espera tu respuesta' : 'Ya has contestado'}
+                    </>
+                  ) : (
+                    <>
+                      <span className={`badge ${modalCase.category.cls}`}>{modalCase.category.label}</span>{' '}
+                      <span className="channel-tag">#{channelLabel(modalCase.channelId)}</span>
+                      {' · '}{modalMessages.length || modalCase.replyCount + 1} mensajes
+                    </>
+                  )}
                 </div>
               </div>
               <button className="modal-close" onClick={closeModal} aria-label="Cerrar">×</button>
@@ -1410,6 +1612,9 @@ export default function Page() {
                   </div>
                 );
               })}
+              {modalCase.isDm && (
+                <div className="modal-note">Aquí solo se ve lo último que te escribieron (y tu respuesta, si ya contestaste). La conversación completa está en Slack.</div>
+              )}
             </div>
             <div className="modal-footer">
               <a className="btn btn-primary" href={modalCase.deepLink || modalCase.link} target="slack-thread" rel="noopener noreferrer">💬 Abrir en Slack</a>
