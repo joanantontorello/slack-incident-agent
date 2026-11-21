@@ -211,16 +211,15 @@ export default function ManualPage() {
         </p>
         <ol>
           <li>Entra en <a href="https://api.slack.com/apps" target="_blank" rel="noopener noreferrer">api.slack.com/apps</a> con tu cuenta de Slack.</li>
-          <li>Abre la app del panel, que se llama <b>«ICO Pipeline Bot»</b>.</li>
-          <li>En el menú de la izquierda, entra en <b>«OAuth &amp; Permissions»</b>. Baja hasta <b>«User Token Scopes»</b> y, con el botón <b>«Add an OAuth Scope»</b>, añade uno a uno estos cuatro: <code>im:read</code>, <code>im:history</code>, <code>mpim:read</code> y <code>mpim:history</code>.</li>
-          <li>Sube al principio de esa misma página, pulsa <b>«Reinstall to Workspace»</b> y acepta.</li>
-          <li>En esa misma página, copia el <b>«User OAuth Token»</b> (empieza por <code>xoxp-</code>). Es como una contraseña: no lo pegues en ningún chat.</li>
-          <li>En Vercel, entra en el proyecto del panel › <b>Settings</b> › <b>Environment Variables</b>. Cambia el valor de <code>SLACK_USER_TOKEN</code> por el token nuevo y guarda. Después vuelve a publicar: <b>Deployments</b> › en el primero de la lista, los tres puntos › <b>Redeploy</b>.</li>
+          <li>Abre la app del panel, que se llama <b>«Joan Anton Slack Bot»</b>.</li>
+          <li>En el menú de la izquierda, entra en <b>«OAuth &amp; permissions»</b>. Baja hasta <b>«Scopes»</b> › <b>«User token scopes»</b> y, con el botón <b>«Add an OAuth scope»</b>, añade uno a uno estos cuatro: <code>im:read</code>, <code>im:history</code>, <code>mpim:read</code> y <code>mpim:history</code>.</li>
+          <li>Arriba saldrá un aviso que pide reinstalar la app. Pulsa el enlace del aviso (o, en el menú de la izquierda, <b>«Install App»</b> › <b>«Reinstall to…»</b>) y acepta.</li>
+          <li>Recarga el panel. Si el aviso amarillo ya no sale, has terminado.</li>
+          <li>Si sigue saliendo: vuelve a <b>«OAuth &amp; permissions»</b> y, en <b>«OAuth Tokens»</b>, copia el <b>«User OAuth Token»</b> con su botón <b>«Copy»</b> (empieza por <code>xoxp-</code>). Es como una contraseña: no lo pegues en ningún chat. En Vercel, entra en el proyecto del panel › <b>Settings</b> › <b>Environment Variables</b>, cambia el valor de <code>SLACK_USER_TOKEN</code> por el que has copiado y guarda. Después vuelve a publicar: <b>Deployments</b> › en el primero de la lista, los tres puntos › <b>Redeploy</b>.</li>
         </ol>
         <div className="callout ok">
-          Cuando termine de publicarse, recarga el panel: el aviso amarillo de
-          arriba desaparece y los privados nuevos empiezan a salir desde ese
-          momento.
+          Cuando el aviso amarillo desaparece, los privados nuevos empiezan a
+          salir desde ese momento. Los antiguos no entran.
         </div>
 
         <h2>Auto-promoción por reacción</h2>

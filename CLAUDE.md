@@ -41,7 +41,7 @@ Repo: https://github.com/joanantontorello/slack-incident-agent
 
 | Var | Para qué |
 |---|---|
-| `SLACK_BOT_TOKEN` | Token `xoxb-...` del bot "ICO Pipeline Bot" |
+| `SLACK_BOT_TOKEN` | Token `xoxb-...` de la app de Slack «Joan Anton Slack Bot» (A0B65NPFUP4) |
 | `MY_USER_ID` | `U08N1C4B9PC` (Joan Anton) — usado para detectar "espera respuesta tuya" |
 | `SLACK_CHANNELS` | `C0A0W5N0LUC,C097D0JTL48,C096QADCNMQ:mention` — formato `ID` o `ID:mention` (solo donde mencionan a `MY_USER_ID`) |
 | `BASIC_AUTH_USER` / `BASIC_AUTH_PASS` | Login del dashboard |
@@ -85,7 +85,7 @@ Canales actuales:
 - La heurística `waitingForMe` es básica (texto incluye `MY_USER_ID`). Puede dar falsos positivos si me mencionan al principio del hilo pero ya he respondido más tarde sin que la última respuesta sea mía.
 - No hay refresco automático. Tienes que pulsar "↻ Refrescar" o recargar la página.
 - Cargar todo tarda 5-15s porque hace ~160 llamadas a `/api/thread` (concurrencia 6). Se podría optimizar con un endpoint único que haga todo en backend.
-- El bot tiene scope `channels:history` + `groups:history`. Si añades un canal nuevo, hay que invitarlo: `/invite @ICO Pipeline Bot` dentro del canal.
+- El bot tiene scope `channels:history` + `groups:history`. Si añades un canal nuevo, hay que invitarlo: `/invite @Joan Anton Slack Bot` dentro del canal.
 
 ## Mejoras posibles (orden de utilidad sugerido)
 
@@ -117,6 +117,6 @@ git push
 ## Datos del workspace Slack (para que no haya que buscarlos)
 
 - Workspace: Adrià Solà Pastor (ICO/Fidelio)
-- Bot name: "ICO Pipeline Bot" (creado por Joan Anton)
+- App de Slack: «Joan Anton Slack Bot» (A0B65NPFUP4, creada por Joan Anton). Antes se pensó llamarla "ICO Pipeline Bot"; ese nombre no existe en Slack.
 - Mi user ID: `U08N1C4B9PC`
 - Otros user IDs habituales (por si necesitas filtros): Alex `U0AM3M7G8DN`, Alba `U0AFN2JPC9Y`, Marco `U09KZ7Q43F1`, Silvia `U07D4H2BEH4`, Silvestre `U09MTUF0DC4`, Lautaro `U0B102S2N6Q`, Irene `U09MTUC07EY`, Adrià `U06RB6CQP40`.
