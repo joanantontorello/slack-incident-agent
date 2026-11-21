@@ -68,6 +68,13 @@ Canales actuales:
 - **`shortenText`** limpia `<mailto:...>`, `<tel:...>`, `<@U...>`, `<!channel>` antes de mostrar.
 - **Sort**: dentro de cada columna, primero los `waitingForMe`, luego por antigüedad (los más viejos primero — "esto lleva ahí 10 días").
 
+## Mensajes privados (DMs y grupos privados)
+
+- `GET /api/dms` lee los privados **nuevos** de Joan con `SLACK_USER_TOKEN` (no con el bot). Solo cuenta lo que llega después de `dm-since` en KV, que se fija la primera vez; el historial antiguo no entra.
+- Hacen falta los permisos de usuario `im:read`, `im:history`, `mpim:read`, `mpim:history` en la app de Slack. Sin ellos la ruta devuelve `error: 'missing_scope'` y el panel enseña el aviso amarillo con el enlace a `/manual#mensajes-privados`.
+- **Quién los ve:** solo las cuentas de `DM_VIEWERS` (separadas por comas). Si no existe, solo las de `BASIC_AUTH_USERS`/`BASIC_AUTH_USER` (las «de sistema»). Los usuarios creados desde /admin reciben `{ dms: [], hidden: true }` y no ven ni el botón ni el aviso.
+- Tarjetas con id `dm:<canal>`. Filtro «Mensajes privados» en la barra de canales.
+
 ## Estado actual
 
 ✅ Funciona en producción. Filtros por canal, mover tarjetas entre columnas, links abren el hilo correcto en Slack. Estado persiste en localStorage del navegador.

@@ -370,7 +370,7 @@ export default function Page() {
   const [undoAction, setUndoAction] = useState(null);
   const [lastSeenTs, setLastSeenTs] = useState(0);
   const [aiProgress, setAiProgress] = useState(null); // {done, total, errors}
-  const [dmsInfo, setDmsInfo] = useState({ error: null, since: null }); // estado de /api/dms
+  const [dmsInfo, setDmsInfo] = useState({ error: null, since: null, hidden: true }); // estado de /api/dms (hidden: esta cuenta no ve los privados)
   const dmsSeqRef = useRef(0);
 
   // Inicialización del estado: intenta KV; si no, localStorage.
@@ -477,7 +477,7 @@ export default function Page() {
     }
     if (seq !== dmsSeqRef.current) return; // ya hay una carga más nueva en marcha
     const errorCode = (res && res.error) || null;
-    setDmsInfo(prev => ({ error: errorCode, since: (res && res.since) || prev.since || null }));
+    setDmsInfo(prev => ({ error: errorCode, since: (res && res.since) || prev.since || null, hidden: !!(res && res.hidden) }));
     if (errorCode && errorCode !== 'missing_scope') {
       console.warn('[dashboard] mensajes privados:', errorCode, (res && res.detail) || '');
       return;
@@ -1375,7 +1375,7 @@ export default function Page() {
         </div>
       </div>
 
-      {dmsInfo.error === 'missing_scope' && (
+      {!dmsInfo.hidden && dmsInfo.error === 'missing_scope' && (
         <div className="dm-notice">
           Para ver tus mensajes privados falta darle permiso al panel en Slack.{' '}
           <a href="/manual#mensajes-privados" target="_blank" rel="noopener noreferrer">Cómo hacerlo</a>
@@ -1390,13 +1390,15 @@ export default function Page() {
               {channelLabel(c.id)}
             </button>
           ))}
-          <button
-            className={activeFilter === DM_FILTER ? 'active' : ''}
-            onClick={() => setActiveFilter(DM_FILTER)}
-            title={dmsInfo.since ? `Mensajes privados nuevos desde el ${formatTs(dmsInfo.since)}` : 'Mensajes privados y grupos privados'}
-          >
-            Mensajes privados
-          </button>
+          {!dmsInfo.hidden && (
+            <button
+              className={activeFilter === DM_FILTER ? 'active' : ''}
+              onClick={() => setActiveFilter(DM_FILTER)}
+              title={dmsInfo.since ? `Mensajes privados nuevos desde el ${formatTs(dmsInfo.since)}` : 'Mensajes privados y grupos privados'}
+            >
+              Mensajes privados
+            </button>
+          )}
         </div>
       </div>
 

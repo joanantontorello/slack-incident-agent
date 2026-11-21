@@ -367,7 +367,52 @@ async function scan() {
   return { dms, since, sinceSource, teamId, checked, skipped, partial: skipped > 0 };
 }
 
-export async function GET() {
+// Solo pueden ver los privados de Joan las cuentas del panel definidas en
+// las variables de entorno (las «de sistema»), o las que se pongan en
+// DM_VIEWERS (separadas por comas). Los usuarios añadidos desde /admin no.
+function envUsers() {
+  const multi = process.env.BASIC_AUTH_USERS;
+  if (multi) {
+    return multi.split(',').map(s => s.trim()).filter(Boolean)
+      .map(pair => pair.slice(0, pair.indexOf(':'))).filter(Boolean);
+  }
+  const u = process.env.BASIC_AUTH_USER;
+  return u ? [u] : [];
+}
+
+function allowedViewers() {
+  const raw = process.env.DM_VIEWERS;
+  if (raw) return raw.split(',').map(s => s.trim()).filter(Boolean);
+  return envUsers();
+}
+
+function currentUser(request) {
+  try {
+    const cookie = request.cookies.get('pipeline_auth')?.value;
+    if (cookie) {
+      const d = Buffer.from(cookie, 'base64').toString('utf-8');
+      return d.slice(0, d.indexOf(':'));
+    }
+    const [scheme, enc] = (request.headers.get('authorization') || '').split(' ');
+    if (scheme === 'Basic' && enc) {
+      const d = Buffer.from(enc, 'base64').toString('utf-8');
+      return d.slice(0, d.indexOf(':'));
+    }
+  } catch (e) {}
+  return '';
+}
+
+export async function GET(request) {
+  const viewers = allowedViewers();
+  if (viewers.length > 0) {
+    const user = currentUser(request);
+    if (!user || !viewers.includes(user)) {
+      return NextResponse.json({ dms: [], hidden: true }, {
+        status: 200,
+        headers: { 'Cache-Control': 'no-store' },
+      });
+    }
+  }
   if (!inflight) {
     inflight = scan()
       .catch(e => ({ dms: [], error: 'unexpected', detail: errorDetail(e) }))
