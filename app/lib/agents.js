@@ -4,7 +4,7 @@
 // como BORRADOR en el hilo de Slack y devuelve una nota a /api/agents/result.
 //
 // Variables de entorno (Vercel):
-//   ROUTINE_FIRE_URL   → «Fire URL» de la rutina (https://api.anthropic.com/v1/claude_code/routines/trig_…/fire)
+//   ROUTINE_FIRE_URL   → opcional; por defecto la de la rutina trig_01TZwkDsyUA5vp1RTefau9qr
 //   ROUTINE_FIRE_TOKEN → token de la rutina (sk-ant-oat01-…), se genera en la web de la rutina
 //
 // Cada envío crea un «pase» de un solo uso (clave en KV con caducidad) para
@@ -28,8 +28,12 @@ async function kv(parts, body) {
   return res.json();
 }
 
+// Rutina «Agentes del Pipeline de Incidencias» (claude.ai/code/routines).
+const DEFAULT_FIRE_URL = 'https://api.anthropic.com/v1/claude_code/routines/trig_01TZwkDsyUA5vp1RTefau9qr/fire';
+function fireUrl() { return process.env.ROUTINE_FIRE_URL || DEFAULT_FIRE_URL; }
+
 export function isAgentsConfigured() {
-  return !!(process.env.ROUTINE_FIRE_URL && process.env.ROUTINE_FIRE_TOKEN);
+  return !!process.env.ROUTINE_FIRE_TOKEN;
 }
 
 export function newRunToken() {
@@ -84,7 +88,7 @@ export async function fetchManualText(origin) {
 }
 
 export async function fireRoutine(text) {
-  const res = await fetch(process.env.ROUTINE_FIRE_URL, {
+  const res = await fetch(fireUrl(), {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${process.env.ROUTINE_FIRE_TOKEN}`,
