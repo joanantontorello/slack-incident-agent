@@ -222,6 +222,24 @@ export default function ManualPage() {
           salir desde ese momento. Los antiguos no entran.
         </div>
 
+        <h2 id="agentes">Agentes de IA (botón «Revisar con IA»)</h2>
+        <p>
+          Al pulsar <b>✨ Revisar con IA</b>, primero se ordenan las tarjetas como siempre. Después,
+          los hilos marcados con <b>⚡ Tú</b> se mandan a los agentes de Claude, que trabajan en la nube
+          (aunque cierres el ordenador).
+        </p>
+        <ul>
+          <li>Leen el hilo entero y deciden qué caso de este manual es.</li>
+          <li>Comprueban en Airtable lo que pide el protocolo (pagos, cuotas atrasadas, casillas, enlaces de pago). Solo leen: no cambian nada.</li>
+          <li>Dejan la respuesta como <b>borrador dentro del hilo de Slack</b>, sin enviarla. La ves en Slack › Borradores o abriendo el hilo.</li>
+          <li>Ponen una nota en la tarjeta: qué han encontrado y «Falta que tú (Joan): …» si hay algo que solo tú puedes hacer.</li>
+        </ul>
+        <p>
+          Mientras trabajan, la tarjeta dice «🤖 Agente trabajando…». Un hilo ya trabajado no se vuelve a
+          mandar en 20 horas salvo que llegue un mensaje nuevo. Máximo 15 hilos por pulsación.
+          Los agentes siguen este manual: si cambias un protocolo aquí, lo siguen la próxima vez.
+        </p>
+
         <h2>Auto-promoción por reacción</h2>
         <p>
           Si reaccionas con ✅ directamente desde Slack, la próxima vez que cargues

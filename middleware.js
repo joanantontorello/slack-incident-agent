@@ -77,7 +77,8 @@ export async function middleware(request) {
   const pathname = request.nextUrl.pathname;
 
   // /login y /api/login son públicos
-  if (pathname === '/login' || pathname === '/api/login') {
+  // /api/agents/result lo llama la rutina de agentes: se valida con su pase.
+  if (pathname === '/login' || pathname === '/api/login' || pathname === '/api/agents/result') {
     return NextResponse.next();
   }
 

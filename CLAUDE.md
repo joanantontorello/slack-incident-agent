@@ -75,6 +75,14 @@ Canales actuales:
 - **Quién los ve:** solo las cuentas de `DM_VIEWERS` (separadas por comas). Si no existe, solo las de `BASIC_AUTH_USERS`/`BASIC_AUTH_USER` (las «de sistema»). Los usuarios creados desde /admin reciben `{ dms: [], hidden: true }` y no ven ni el botón ni el aviso.
 - Tarjetas con id `dm:<canal>`. Filtro «Mensajes privados» en la barra de canales.
 
+## Agentes de IA (botón «Revisar con IA»)
+
+- Tras clasificar, `analyzeAll` (page.js) manda los hilos `aiVerdict === 'ESPERA_JOAN'` a `POST /api/agents` (máx. 15; no repite un hilo en 20 h si no hay mensajes nuevos).
+- `/api/agents` crea un PASE de un solo uso en KV (`pipeline-agent-run:<pase>`, caduca 6 h), lee `/manual` como texto y dispara la rutina de Claude Code «Agentes del Pipeline de Incidencias» (`trig_01TZwkDsyUA5vp1RTefau9qr`, https://claude.ai/code/routines/trig_01TZwkDsyUA5vp1RTefau9qr) con `ROUTINE_FIRE_URL` + `ROUTINE_FIRE_TOKEN`.
+- La rutina (prompt en `agents/prompt-rutina.md`; si se cambia, actualizarlo también en la rutina) solo usa los conectores Slack y Airtable: lee, deja borrador con `slack_send_message_draft` y devuelve la nota a `POST /api/agents/result` (público en el middleware, validado con el pase).
+- El entorno de la nube necesita `slack-incident-agent.vercel.app` en «Allowed domains» para poder devolver las notas.
+- Campos en el estado del caso: `agentStatus` (working/draft/nodraft/error), `agentNote`, `agentCase`, `agentAt`, `agentDoneAt`, `agentSessionUrl`.
+
 ## Estado actual
 
 ✅ Funciona en producción. Filtros por canal, mover tarjetas entre columnas, links abren el hilo correcto en Slack. Estado persiste en localStorage del navegador.

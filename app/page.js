@@ -1093,14 +1093,60 @@ export default function Page() {
     }
 
     setAiProgress(null);
+
+    // Agentes: los hilos que esperan a Joan (y no tienen ya un agente
+    // reciente sin mensajes nuevos) se mandan a la rutina de Claude, que
+    // deja la respuesta como borrador en Slack y una nota en la tarjeta.
+    let agentMsg = '';
+    try {
+      const fresh = await fetchServerState();
+      const sc = (fresh && fresh.enabled ? fresh.cases : stateRef.current.cases) || {};
+      const toAgents = cases.filter(c => {
+        if (c.isDm) return false;
+        const s = sc[c.id] || {};
+        const st = s.status || 'todo';
+        if (s.archived || st === 'done') return false;
+        if (s.aiVerdict !== 'ESPERA_JOAN') return false;
+        if (s.agentAt) {
+          const lastMsgMs = c.lastMessageTs ? parseFloat(c.lastMessageTs) * 1000 : 0;
+          const recent = Date.now() - s.agentAt < 20 * 60 * 60 * 1000;
+          if (recent && lastMsgMs <= s.agentAt) return false; // ya trabajado y sin novedades
+        }
+        return true;
+      }).slice(0, 15);
+      if (toAgents.length > 0) {
+        const res = await fetch('/api/agents', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cases: toAgents.map(c => ({
+              channelId: c.channelId, ts: c.ts, link: c.link,
+              channelName: channelLabel(c.channelId), title: c.title,
+            })),
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          agentMsg = ` · 🤖 ${data.count} ${data.count === 1 ? 'agente trabajando' : 'agentes trabajando'}`;
+          const fresh2 = await fetchServerState();
+          if (fresh2 && fresh2.enabled) setState({ cases: fresh2.cases || {} });
+        } else if (data.error !== 'not_configured') {
+          agentMsg = ' · ⚠️ no se pudieron lanzar los agentes';
+          console.warn('agents:', data.error);
+        }
+      }
+    } catch (e) {
+      console.warn('agents fetch failed:', e);
+    }
+
     setUndoAction({
       id: Date.now(),
-      label: autoMoved > 0
+      label: (autoMoved > 0
         ? `✓ Análisis IA · ${autoMoved} auto-movidas a Hecho`
-        : `✓ Análisis IA · badges actualizados`,
+        : `✓ Análisis IA · badges actualizados`) + agentMsg,
       run: () => setUndoAction(null),
     });
-  }, [cases, state.cases, persistPatches, applyReactionsForTransition]);
+  }, [cases, state.cases, persistPatches, applyReactionsForTransition, channelLabel]);
 
   // Auto-dismiss undo tras 6s
   useEffect(() => {
@@ -1187,6 +1233,12 @@ export default function Page() {
         .ai-badge.waiting-joan { background: #fef3c7; color: #92400e; }
         .ai-badge.waiting-customer { background: #e0e7ff; color: #4338ca; }
         .ai-badge.resolved { background: #d1fae5; color: #047857; }
+        .agent-note { margin: 8px 0 2px; padding: 8px 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.45; background: #f5f3ff; color: #4c1d95; border: 1px solid #ede9fe; cursor: default; }
+        .agent-note.draft { background: #ecfdf5; color: #065f46; border-color: #d1fae5; }
+        .agent-note.error { background: #fef2f2; color: #991b1b; border-color: #fee2e2; }
+        .agent-note.working { color: #6d28d9; }
+        .agent-note a { color: inherit; text-decoration: underline; }
+        .agent-note-text { margin-top: 4px; white-space: pre-wrap; font-weight: 400; }
 
         /* SEARCH */
         .search-box { display: flex; align-items: center; gap: 8px; background: #f1f5f9; border-radius: 10px; padding: 8px 14px; flex: 1; max-width: 460px; transition: background 0.15s, box-shadow 0.15s; }
@@ -1520,6 +1572,24 @@ export default function Page() {
                           <span className={age.cls}>{age.text}</span>
                         </div>
                         <div className="card-title">{c.title}</div>
+                        {(() => {
+                          const s = state.cases[c.id] || {};
+                          if (!s.agentStatus) return null;
+                          if (s.agentStatus === 'working') {
+                            const stale = s.agentAt && Date.now() - s.agentAt > 45 * 60 * 1000;
+                            return <div className="agent-note working" onClick={(e) => e.stopPropagation()}>
+                              🤖 {stale ? 'El agente no ha terminado.' : 'Agente trabajando…'}
+                              {stale && s.agentSessionUrl && <> <a href={s.agentSessionUrl} target="_blank" rel="noopener noreferrer">Ver qué pasó</a></>}
+                            </div>;
+                          }
+                          const head = s.agentStatus === 'draft' ? '🤖 Borrador listo en el hilo'
+                            : s.agentStatus === 'error' ? '🤖 El agente no pudo terminarlo'
+                            : '🤖 Revisado, sin borrador';
+                          return <div className={`agent-note ${s.agentStatus}`} onClick={(e) => e.stopPropagation()}>
+                            <strong>{head}{s.agentCase ? ` · ${s.agentCase}` : ''}</strong>
+                            {s.agentNote && <div className="agent-note-text">{s.agentNote}</div>}
+                          </div>;
+                        })()}
                         {c.isDm && c.lastText && <div className="card-summary dm-preview">{c.lastText}</div>}
                         <div className="card-actions" onClick={(e) => e.stopPropagation()}>
                           <a className="btn btn-primary" href={c.deepLink || c.link} target="slack-thread" rel="noopener noreferrer">{c.isDm ? 'Abrir chat' : 'Ver hilo'}</a>
