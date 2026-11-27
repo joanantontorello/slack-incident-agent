@@ -17,9 +17,11 @@ export async function GET(request) {
 
   const results = await Promise.all(channels.map(async (ch) => {
     try {
+      // Canales de avisos: 31 días, para que entren los avisos mensuales.
+      const chOldest = ch.filter === 'avisos' ? Math.min(oldest, Math.floor(Date.now() / 1000 - 31 * 86400)) : oldest;
       const data = await slackFetch('conversations.history', {
         channel: ch.id,
-        oldest: String(oldest),
+        oldest: String(chOldest),
         limit: 100,
       });
       return {

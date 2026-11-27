@@ -362,6 +362,60 @@ export default function ManualPage() {
           pasos estandarizados, lo añadimos aquí.
         </p>
 
+        <h3 id="auto-follow-ups"><span className="badge badge-otro">🔁 Auto follow-ups</span> (avisos de #auto-follow-ups)</h3>
+        <p>
+          <i>Canal de recordatorios automáticos para Joan (C0ABKTFKUB1). Cada aviso es una tarjeta, tenga
+          respuestas o no, y va directo a los agentes (la IA no lo da por resuelto). Se lee el último mes,
+          para que entren los avisos mensuales. Cuando un aviso está hecho, márcalo con ✅ o pásalo a Hecho.</i>
+        </p>
+
+        <div className="step otro">
+          <h4>Auto follow-up · Caso pendiente de decisión (recobro)</h4>
+          <p><i>Aviso «⏳ Caso pendiente de decisión»: un alumno lleva 10 días en impago y el closer no lo ha recuperado.</i></p>
+          <ol>
+            <li>Copiar el email del aviso y buscarlo en Slack para encontrar el hilo donde se avisó al closer del impago (normalmente en las divisiones de ventas o de recobros). Mirar también la ficha del alumno en Airtable (👤 Leads, enlace del aviso).</li>
+            <li>Leer qué ha contestado el closer en ese hilo:
+              <ul>
+                <li><b>Dice que lo pausemos y lo pasemos a recobro</b> → pausarlo y en la ficha poner <b>Estado = Pasado a Recobro</b>. (Lo hace Joan.)</li>
+                <li><b>No ha contestado</b> → mandarle un follow-up en ese mismo hilo, mencionándole: que el alumno sigue en impago y si lo pasamos a recobro o lo está gestionando él.</li>
+                <li><b>Dice que lo está gestionando él</b> → en la ficha, <b>💼 Responsable Recobro = el closer</b>. (Lo hace Joan.) No se pausa.</li>
+                <li><b>Dice que ha acordado otra fecha de pago y que está todo en orden</b> → no pausarlo. Nada más.</li>
+              </ul>
+            </li>
+            <li>Si la ficha ya está en «Pasado a Recobro» o con responsable puesto, el aviso ya está resuelto: tarjeta a Hecho.</li>
+          </ol>
+        </div>
+
+        <div className="step otro">
+          <h4>Auto follow-up · Copia de seguridad mensual de GetResponse</h4>
+          <p><i>Aviso «Còpia de Seguridad Mensual Get Response» (primer lunes de mes).</i></p>
+          <ol>
+            <li>La copia la hace Claude en el ordenador de Joan con la skill <b>getresponse-backup</b>: exporta los contactos de GetResponse y el CSV <code>Backup_Newsletter_AAAAMMDD</code> queda en Descargas.</li>
+            <li>Joan arrastra ese archivo a la carpeta de copias de Drive (la del enlace del aviso).</li>
+            <li>Los agentes de la nube no pueden hacerla: no dejan borrador, solo la nota «Falta que tú (Joan): pedirle a Claude la copia de GetResponse y arrastrar el CSV a Drive».</li>
+          </ol>
+        </div>
+
+        <div className="step otro">
+          <h4>Auto follow-up · Informe mensual del Evergreen</h4>
+          <p><i>Aviso «Informe Mensual del evergreen» (primer lunes de mes).</i></p>
+          <ol>
+            <li>Sacar de Airtable (base CRM ICO) los datos del Evergreen del <b>mes anterior</b>: registros, leads, llamadas agendadas y hechas, ventas (número e importe) y, si se puede, la comparación con el mes de antes.</li>
+            <li>Escribir un informe corto con esos KPIs principales: una línea por dato y dos o tres frases de lectura. Nada de inventar: si un dato no está, se dice.</li>
+            <li>Dejarlo como borrador en el hilo del aviso para que Joan lo revise.</li>
+          </ol>
+        </div>
+
+        <div className="step otro">
+          <h4>Auto follow-up · Renovar servicios de Netelip</h4>
+          <p><i>Aviso «Renueva servicios de Netelip» (día 1 de cada mes).</i></p>
+          <ol>
+            <li>Dejar un borrador en <b>#división-finanzas</b> para Sílvia pidiéndole que recargue saldo en Netelip: <b>300 €</b> por defecto (no se puede entrar a mirar el saldo).</li>
+            <li>Antes, mirar en #división-finanzas que Joan no se lo haya pedido ya este mes. Si ya está pedido, tarjeta a Hecho.</li>
+            <li>Siempre borrador: lo envía Joan.</li>
+          </ol>
+        </div>
+
         <hr />
 
         <h2>Recordatorio operativo</h2>

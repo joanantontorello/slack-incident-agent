@@ -241,6 +241,7 @@ export default function AdminPage() {
                       >
                         <option value="all">Todos los hilos</option>
                         <option value="mention">Solo menciones a ti</option>
+                        <option value="avisos">Cada aviso es una tarjeta</option>
                       </select>
                     </label>
                   );

@@ -579,6 +579,7 @@ export default function Page() {
       const myId = cfgRes.myUserId;
 
       const msgsRes = await fetch('/api/messages?days=14').then(r => r.json());
+      const avisoChannels = new Set((cfgRes.channels || []).filter(c => c.filter === 'avisos').map(c => c.id));
       if (msgsRes.error) throw new Error(msgsRes.error);
 
       // Gather all user IDs to resolve names (autores + menciones <@U…>)
@@ -607,7 +608,13 @@ export default function Page() {
         for (const m of messages) {
           const mentionsMe = myId && m.text && m.text.includes(myId);
           const isFromMe = m.user === myId;
-          if (filter === 'mention') {
+          if (filter === 'avisos') {
+            // Canal de avisos automáticos: cada mensaje es una tarjeta,
+            // tenga respuestas o no (menos los de «se ha unido al canal»).
+            if (!['channel_join', 'channel_leave', 'channel_topic', 'channel_purpose'].includes(m.subtype)) {
+              threadFetches.push({ channel: channelId, ts: m.ts, root: m, channelFilter: filter });
+            }
+          } else if (filter === 'mention') {
             if (m.reply_count > 0 || mentionsMe || isFromMe) {
               threadFetches.push({ channel: channelId, ts: m.ts, root: m, channelFilter: filter });
             }
@@ -678,6 +685,8 @@ export default function Page() {
 
           const waitingForMe = (() => {
             if (!myId) return false;
+            // Avisos automáticos: te esperan hasta que contestes tú en el hilo.
+            if (f.channelFilter === 'avisos') return lastUserId !== myId;
             if (replies.length === 0) {
               return rootText.includes(myId) && rootUser !== myId;
             }
@@ -724,6 +733,7 @@ export default function Page() {
             category: categorize(allText),
             waitingForMe,
             checkedByMe,
+            isAviso: f.channelFilter === 'avisos',
             link: buildSlackLink(f.channel, f.ts, cfgRes?.team?.url),
             deepLink: buildSlackDeepLink(f.channel, f.ts, cfgRes?.team?.team_id),
             replyCount: replies.length,
@@ -791,8 +801,10 @@ export default function Page() {
             const lastMsg = replies.length > 0 ? (replies[replies.length - 1] || {}) : root;
             const lastUserId = lastMsg.user || rootUser;
             const lastText = String(lastMsg.text || rootText);
+            const recIsAviso = avisoChannels.has(r.channel);
             const waitingForMe = (() => {
               if (!myId) return false;
+              if (recIsAviso) return lastUserId !== myId;
               if (replies.length === 0) return rootText.includes(myId) && rootUser !== myId;
               if (lastUserId === myId) return false;
               return allText.includes(myId);
@@ -819,6 +831,7 @@ export default function Page() {
               link: buildSlackLink(r.channel, r.ts, cfgRes?.team?.url),
               deepLink: buildSlackDeepLink(r.channel, r.ts, cfgRes?.team?.team_id),
               replyCount: replies.length,
+              isAviso: recIsAviso,
               recovered: true,
             });
           } catch (err) {
@@ -1051,6 +1064,7 @@ export default function Page() {
   const analyzeAll = useCallback(async () => {
     const pendingCases = cases.filter(c => {
       if (c.isDm) return false; // la IA solo revisa hilos de canales
+      if (c.isAviso) return false; // los avisos automáticos van directos a los agentes
       const s = state.cases[c.id] || {};
       const st = s.status || 'todo';
       return (st === 'todo' || st === 'doing') && !s.archived;

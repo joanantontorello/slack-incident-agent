@@ -46,7 +46,8 @@ function buildCase(channelId, ts, msgs, { myId, autoDoneIds, teamUrl, filter, ro
   const lastMsg = reps.length ? reps[reps.length - 1] : root;
   // Igual que el panel: ¿espera respuesta de Joan?
   const lastUserId = lastMsg.user || root.user || '';
-  const waitingForMe = !!myId && (reps.length === 0
+  const isAviso = filter === 'avisos';
+  const waitingForMe = !!myId && (isAviso ? lastUserId !== myId : reps.length === 0
     ? rootText.includes(myId) && root.user !== myId
     : lastUserId !== myId && allText.includes(myId));
   const reactions = Array.isArray(root.reactions) ? root.reactions : [];
@@ -60,6 +61,7 @@ function buildCase(channelId, ts, msgs, { myId, autoDoneIds, teamUrl, filter, ro
     link: teamUrl ? `${teamUrl.replace(/\/$/, '')}/archives/${channelId}/p${String(ts).replace('.', '')}` : '',
     checkedByMe,
     waitingForMe,
+    isAviso,
     lastTs: lastMsg.ts || ts,
   };
 }
@@ -95,14 +97,20 @@ export async function runSweep(origin, { dry = false } = {}) {
   const fetches = [];
   await pool(channels, 4, async ch => {
     let msgs = [];
-    try { msgs = (await slackFetch('conversations.history', { channel: ch.id, oldest: String(oldest), limit: 100 })).messages || []; } catch (e) {}
+    const chOldest = ch.filter === 'avisos' ? Math.floor(Date.now() / 1000 - 31 * 86400) : oldest;
+    try { msgs = (await slackFetch('conversations.history', { channel: ch.id, oldest: String(chOldest), limit: 100 })).messages || []; } catch (e) {}
     for (const m of msgs) {
+      if (ch.filter === 'avisos') {
+        if (!['channel_join', 'channel_leave', 'channel_topic', 'channel_purpose'].includes(m.subtype)) fetches.push({ channel: ch.id, ts: m.ts, root: m, filter: 'avisos' });
+        continue;
+      }
       const mentionsMe = myId && m.text && m.text.includes(myId);
       const ok = ch.filter === 'mention' ? (m.reply_count > 0 || mentionsMe || m.user === myId) : m.reply_count > 0;
       if (ok) fetches.push({ channel: ch.id, ts: m.ts, root: m, filter: ch.filter || 'all' });
     }
   });
   const ctx = { myId, autoDoneIds, teamUrl };
+  const avisoIds = new Set(channels.filter(c => c.filter === 'avisos').map(c => c.id));
   const built = (await pool(fetches, 6, async f =>
     buildCase(f.channel, f.ts, await replies(f.channel, f.ts), { ...ctx, filter: f.filter, rootFallback: f.root })
   )).filter(Boolean);
@@ -117,7 +125,7 @@ export async function runSweep(origin, { dry = false } = {}) {
     const sep = id.indexOf('-');
     const channel = id.slice(0, sep), ts = id.slice(sep + 1);
     const msgs = await replies(channel, ts);
-    return msgs.length ? buildCase(channel, ts, msgs, { ...ctx, filter: 'all' }) : null;
+    return msgs.length ? buildCase(channel, ts, msgs, { ...ctx, filter: avisoIds.has(channel) ? 'avisos' : 'all' }) : null;
   })).filter(Boolean);
   const cases = [...built, ...recovered];
 
@@ -138,7 +146,8 @@ export async function runSweep(origin, { dry = false } = {}) {
   let classified = 0, autoMoved = 0, errors = 0;
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (apiKey && pending.length) {
-    const results = await analyzeMany(apiKey, pending.map(c => ({ channelId: c.channelId, ts: c.ts })));
+    // Los avisos automáticos no se clasifican: van directos a los agentes.
+    const results = await analyzeMany(apiKey, pending.filter(c => !c.isAviso).map(c => ({ channelId: c.channelId, ts: c.ts })));
     const patches = [];
     const reacts = [];
     for (const r of results) {

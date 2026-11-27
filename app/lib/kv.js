@@ -111,7 +111,7 @@ export async function getKvChannels() {
 export async function setKvChannels(channels) {
   if (!isKvEnabled()) throw new Error('KV not configured');
   const clean = (Array.isArray(channels) ? channels : [])
-    .map(c => ({ id: String(c.id || '').trim(), filter: c.filter === 'mention' ? 'mention' : 'all' }))
+    .map(c => ({ id: String(c.id || '').trim(), filter: ['mention', 'avisos'].includes(c.filter) ? c.filter : 'all' }))
     .filter(c => /^C[A-Z0-9]+$/.test(c.id));
   await kvSetJson(CHANNELS_KEY, clean);
   return clean;
