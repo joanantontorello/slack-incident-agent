@@ -401,7 +401,8 @@ export default function ManualPage() {
           <p><i>Aviso «Informe Mensual del evergreen» (primer lunes de mes).</i></p>
           <ol>
             <li>Sacar de Airtable (base CRM ICO) los datos del Evergreen del <b>mes anterior</b>. Un lead es del Evergreen si su campaña UTM es <code>ico_evergreen</code> (los lead magnets de evergreen, <code>lm-…</code>, aparte; <code>ico_launch_05</code> es del lanzamiento y no cuenta). Datos: registros, leads, llamadas agendadas y hechas, ventas (número e importe) y, si se puede, la comparación con el mes de antes.</li>
-            <li>Escribir un informe corto con esos KPIs principales: una línea por dato y dos o tres frases de lectura. Nada de inventar: si un dato no está, se dice.</li>
+            <li>Cómo sacarlo (todo de 👤 Leads, por mes de «Fecha Creación», hora de España): Evergreen = «UTM / campaign (from Registros) - First» contiene <code>ico_evergreen</code>, quitando los que pasaron a un lanzamiento («… - Last» distinta de ico_evergreen, o «Fuente de último registro» de lanzamiento). Agendaron = «☎️ Recount Llamadas agendadas» &gt; 0. Hechas = «➕☎️ Llamadas asistidas». No-shows = «☎️ Recount Llamadas No show». Canceladas = «➕☎️ Llamadas Canceladas». Ventas = «➕ Es venta» = 1. Facturado = «💵 Facturación total». Cobrado = «💵 Cash Collected total». Lead magnets (<code>lm-</code>) aparte. No usar la campaña de la tabla ☎️ Llamadas (viene vacía en las del Typeform).</li>
+          <li>Escribir un informe corto con esos KPIs principales: una línea por dato y dos o tres frases de lectura. Nada de inventar: si un dato no está, se dice.</li>
             <li>Dejarlo como borrador en el hilo del aviso para que Joan lo revise.</li>
           </ol>
         </div>
