@@ -232,7 +232,7 @@ export default function ManualPage() {
           <li>Leen el hilo entero y deciden qué caso de este manual es.</li>
           <li>Comprueban en Airtable lo que pide el protocolo (pagos, cuotas atrasadas, casillas, enlaces de pago). Solo leen: no cambian nada.</li>
           <li>Dejan la respuesta como <b>borrador dentro del hilo de Slack</b>, sin enviarla. La ves en Slack › Borradores o abriendo el hilo.</li>
-          <li>Ponen una nota en la tarjeta: qué han encontrado y «Falta que tú (Joan): …» si hay algo que solo tú puedes hacer.</li>
+          <li>En la tarjeta sale una etiqueta corta («Borrador listo», «Revisado, sin borrador»…). Al abrir la tarjeta ves la nota entera: qué han encontrado y «Falta que tú (Joan): …» si hay algo que solo tú puedes hacer.</li>
         </ul>
         <p>
           Mientras trabajan, la tarjeta dice «🤖 Agente trabajando…». Un hilo ya trabajado no se vuelve a
@@ -248,12 +248,12 @@ export default function ManualPage() {
           Si un hilo ya tiene un borrador del agente que aún no has usado, el agente <b>no crea otro</b>
           (Slack se quedaría con el viejo): solo actualiza la nota de la tarjeta.
         </p>
-        <h3 id="sops">📚 SOPs por enseñar</h3>
+        <h3 id="sops">SOPs por documentar</h3>
         <p>
           En cada hilo el agente apunta qué ficha de este manual ha usado, o por qué no había ninguna o el
-          caso depende de ti. Los <b>viernes</b> el panel enseña arriba «Casos que se repiten y te esperan
-          a ti»: los del último mes, ordenados por veces, con uno o dos ejemplos. Cualquier otro día lo
-          abres con el botón <b>📚 SOPs</b>.
+          caso depende de ti. El botón <b>SOPs</b> (arriba, con el icono del libro) abre una ventana con los
+          casos del último mes que se repiten y te esperan a ti, ordenados por veces y con uno o dos ejemplos.
+          El número del botón dice cuántos hay.
         </p>
         <p>
           Elige el primero y manda un audio contando cómo lo haces. Claude lo convierte en una ficha

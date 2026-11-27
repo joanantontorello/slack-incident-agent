@@ -374,6 +374,7 @@ export default function Page() {
   // dependen de Joan. Se abre solo los viernes; el resto, con el botón.
   const [sops, setSops] = useState(null); // null | { groups, loading, error }
   const [lastSweep, setLastSweep] = useState(null);
+  const [sopsOpen, setSopsOpen] = useState(false);
   const loadSops = useCallback(async () => {
     setSops(p => ({ groups: p?.groups || [], loading: true }));
     try {
@@ -383,16 +384,12 @@ export default function Page() {
       setSops({ groups: [], loading: false, error: String(e.message || e) });
     }
   }, []);
-  const closeSops = () => {
-    setSops(null);
-    try { localStorage.setItem('sops-closed', new Date().toISOString().slice(0, 10)); } catch (e) {}
-  };
+  const openSops = () => { setSopsOpen(true); loadSops(); };
+  const closeSops = () => setSopsOpen(false);
   useEffect(() => {
     fetch('/api/agents').then(r => r.json()).then(d => setLastSweep(d.lastSweep || null)).catch(() => {});
-    const wd = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', weekday: 'short' }).format(new Date());
-    let closedToday = false;
-    try { closedToday = localStorage.getItem('sops-closed') === new Date().toISOString().slice(0, 10); } catch (e) {}
-    if (wd === 'Fri' && !closedToday) loadSops();
+    // Se cargan al entrar para enseñar cuántos hay en el botón.
+    loadSops(false);
   }, [loadSops]);
   const [dmsInfo, setDmsInfo] = useState({ error: null, since: null, hidden: true }); // estado de /api/dms (hidden: esta cuenta no ve los privados)
   const dmsSeqRef = useRef(0);
@@ -1264,19 +1261,27 @@ export default function Page() {
         .agent-note a { color: inherit; text-decoration: underline; }
         .agent-note-text { margin-top: 4px; white-space: pre-wrap; font-weight: 400; }
         .agent-note-ficha { margin-top: 4px; font-size: 11.5px; opacity: .75; }
-        .sops-panel { margin: 12px 22px; padding: 14px 16px; border-radius: 12px; background: #fffbeb; border: 1px solid #fde68a; color: #78350f; font-size: 13.5px; }
-        .sops-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-        .sops-sub { font-size: 12px; opacity: .75; }
-        .sops-close { margin-left: auto; background: none; border: 0; font-size: 20px; line-height: 1; cursor: pointer; color: inherit; }
-        .sops-list { margin: 10px 0 0; padding-left: 20px; }
-        .sops-list li { margin-bottom: 8px; }
-        .sops-example { font-size: 12.5px; margin-top: 2px; opacity: .9; }
-        .sops-example a { color: inherit; text-decoration: underline; }
-        .sops-tags { margin-left: 6px; }
-        .sops-tag { display: inline-block; margin-left: 4px; padding: 1px 6px; border-radius: 6px; font-size: 11px; background: #fef3c7; border: 1px solid #fde68a; }
+        .agent-chip { display: inline-block; margin: 6px 0 2px; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; background: #f5f3ff; color: #5b21b6; border: 1px solid #ede9fe; }
+        .agent-chip.draft { background: #ecfdf5; color: #065f46; border-color: #d1fae5; }
+        .agent-chip.error { background: #fef2f2; color: #991b1b; border-color: #fee2e2; }
+        .agent-chip.nodraft { background: #f3f4f6; color: #4b5563; border-color: #e5e7eb; }
+        .agent-chip a { color: inherit; text-decoration: underline; }
+        .modal-body .agent-note { margin: 0 0 12px; }
+        .sops-btn { display: inline-flex; align-items: center; gap: 6px; }
+        .sops-count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #f59e0b; color: #fff; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+        .sops-modal { max-width: 720px; }
+        .sops-title { display: flex; align-items: center; gap: 8px; }
+        .sops-list { list-style: none; margin: 0; padding: 0; }
+        .sops-item { padding: 12px 0; border-bottom: 1px solid #f1f5f9; }
+        .sops-item:last-child { border-bottom: 0; }
+        .sops-item-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 14px; }
+        .sops-rank { width: 22px; height: 22px; border-radius: 999px; background: #fef3c7; color: #92400e; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+        .sops-times { font-size: 12px; color: #6b7280; }
+        .sops-tag { padding: 1px 7px; border-radius: 6px; font-size: 11px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
         .sops-tag.joan { background: #ede9fe; border-color: #ddd6fe; color: #4c1d95; }
-        .sops-empty { margin-top: 8px; font-size: 12.5px; opacity: .8; }
-        .sops-foot { margin-top: 6px; font-size: 12px; opacity: .8; }
+        .sops-example { font-size: 12.5px; color: #374151; margin: 4px 0 0 30px; }
+        .sops-example a { color: #2563eb; text-decoration: underline; }
+        .sops-foot { justify-content: flex-start; font-size: 12.5px; color: #6b7280; }
 
         /* SEARCH */
         .search-box { display: flex; align-items: center; gap: 8px; background: #f1f5f9; border-radius: 10px; padding: 8px 14px; flex: 1; max-width: 460px; transition: background 0.15s, box-shadow 0.15s; }
@@ -1436,7 +1441,10 @@ export default function Page() {
         <div className="header-right">
           <a className="icon-btn" href="/admin" title="Gestión de usuarios">Usuarios</a>
           <a className="icon-btn" href="/manual" target="_blank" rel="noopener noreferrer" title="Manual de uso">Manual</a>
-          <button className="icon-btn" onClick={() => (sops ? closeSops() : loadSops())} title="Casos que se repiten y te esperan a ti (último mes)">📚 SOPs</button>
+          <button className="icon-btn sops-btn" onClick={openSops} title="Casos que se repiten y te esperan a ti (último mes)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> SOPs
+            {sops && sops.groups && sops.groups.length > 0 && <span className="sops-count">{sops.groups.length}</span>}
+          </button>
           <button
             className="icon-btn ai-btn"
             onClick={analyzeAll}
@@ -1474,41 +1482,48 @@ export default function Page() {
         </div>
       )}
 
-      {sops && (
-        <div className="sops-panel">
-          <div className="sops-head">
-            <strong>📚 Casos que se repiten y te esperan a ti</strong>
-            <span className="sops-sub">Último mes · los agentes no tenían ficha en el manual o dependían de ti</span>
-            <button className="sops-close" onClick={closeSops} aria-label="Cerrar">×</button>
-          </div>
-          {sops.loading && <div className="sops-empty">Cargando…</div>}
-          {!sops.loading && sops.error && <div className="sops-empty">No se ha podido cargar: {sops.error}</div>}
-          {!sops.loading && !sops.error && sops.groups.length === 0 && (
-            <div className="sops-empty">Todavía no hay casos apuntados. Se llenará a medida que los agentes trabajen los hilos.</div>
-          )}
-          {!sops.loading && sops.groups.length > 0 && (
-            <ol className="sops-list">
-              {sops.groups.slice(0, 10).map(g => (
-                <li key={g.tema}>
-                  <div><b>{g.tema}</b> · {g.count} {g.count === 1 ? 'vez' : 'veces'}
-                    <span className="sops-tags">
-                      {g.sinFicha > 0 && <span className="sops-tag">sin ficha</span>}
-                      {g.dependeJoan > 0 && <span className="sops-tag joan">depende de ti</span>}
-                    </span>
-                  </div>
-                  {g.ejemplos.map((e, i) => (
-                    <div key={i} className="sops-example">
-                      {e.link ? <a href={e.link} target="slack-thread" rel="noopener noreferrer">{e.title || 'Ver hilo'}</a> : (e.title || '—')}
-                      {e.porQue && <span> — {e.porQue}</span>}
-                    </div>
+      {sopsOpen && (
+        <div className="modal-overlay" onClick={closeSops}>
+          <div className="modal sops-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2 className="sops-title"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> SOPs por documentar</h2>
+                <div className="meta">Casos del último mes que te esperan a ti: los agentes no tenían ficha en el manual o dependían de ti. Ordenados por las veces que han salido.</div>
+              </div>
+              <button className="modal-close" onClick={closeSops} aria-label="Cerrar">×</button>
+            </div>
+            <div className="modal-body">
+              {(!sops || sops.loading) && <div className="loading"><span className="spinner"></span> Cargando…</div>}
+              {sops && !sops.loading && sops.error && <div className="empty">No se ha podido cargar: {sops.error}</div>}
+              {sops && !sops.loading && !sops.error && sops.groups.length === 0 && (
+                <div className="empty">Todavía no hay casos apuntados. La lista se llena a medida que los agentes trabajan los hilos.</div>
+              )}
+              {sops && !sops.loading && sops.groups.length > 0 && (
+                <ol className="sops-list">
+                  {sops.groups.map((g, idx) => (
+                    <li key={g.tema} className="sops-item">
+                      <div className="sops-item-head">
+                        <span className="sops-rank">{idx + 1}</span>
+                        <b>{g.tema}</b>
+                        <span className="sops-times">{g.count} {g.count === 1 ? 'vez' : 'veces'}</span>
+                        {g.sinFicha > 0 && <span className="sops-tag">sin ficha</span>}
+                        {g.dependeJoan > 0 && <span className="sops-tag joan">depende de ti</span>}
+                      </div>
+                      {g.ejemplos.map((e, i) => (
+                        <div key={i} className="sops-example">
+                          {e.link ? <a href={e.link} target="slack-thread" rel="noopener noreferrer">{e.title || 'Ver hilo'}</a> : (e.title || '—')}
+                          {e.porQue && <span> — {e.porQue}</span>}
+                        </div>
+                      ))}
+                    </li>
                   ))}
-                </li>
-              ))}
-            </ol>
-          )}
-          {!sops.loading && sops.groups.length > 0 && (
-            <div className="sops-foot">Elige el primero y mándale a Claude un audio contando cómo lo haces. Lo convierte en una ficha del manual.</div>
-          )}
+                </ol>
+              )}
+            </div>
+            {sops && !sops.loading && sops.groups.length > 0 && (
+              <div className="modal-footer sops-foot">Elige el primero y mándale a Claude un audio contando cómo lo haces. Lo convierte en una ficha del manual.</div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1651,23 +1666,20 @@ export default function Page() {
                         </div>
                         <div className="card-title">{c.title}</div>
                         {(() => {
+                          // Etiqueta corta del agente. La nota completa se ve al abrir la tarjeta.
                           const s = state.cases[c.id] || {};
                           if (!s.agentStatus) return null;
                           if (s.agentStatus === 'working') {
                             const stale = s.agentAt && Date.now() - s.agentAt > 45 * 60 * 1000;
-                            return <div className="agent-note working" onClick={(e) => e.stopPropagation()}>
-                              🤖 {stale ? 'El agente no ha terminado.' : 'Agente trabajando…'}
-                              {stale && s.agentSessionUrl && <> <a href={s.agentSessionUrl} target="_blank" rel="noopener noreferrer">Ver qué pasó</a></>}
+                            return <div className="agent-chip working" onClick={(e) => e.stopPropagation()}>
+                              {stale ? 'El agente no ha terminado' : 'Agente trabajando…'}
+                              {stale && s.agentSessionUrl && <> · <a href={s.agentSessionUrl} target="_blank" rel="noopener noreferrer">ver qué pasó</a></>}
                             </div>;
                           }
-                          const head = s.agentStatus === 'draft' ? '🤖 Borrador listo en el hilo'
-                            : s.agentStatus === 'error' ? '🤖 El agente no pudo terminarlo'
-                            : '🤖 Revisado, sin borrador';
-                          return <div className={`agent-note ${s.agentStatus}`} onClick={(e) => e.stopPropagation()}>
-                            <strong>{head}{s.agentCase ? ` · ${s.agentCase}` : ''}</strong>
-                            {s.agentNote && <div className="agent-note-text">{s.agentNote}</div>}
-                            {s.agentFicha && <div className="agent-note-ficha">Ficha: {s.agentFicha}</div>}
-                          </div>;
+                          const label = s.agentStatus === 'draft' ? 'Borrador listo'
+                            : s.agentStatus === 'error' ? 'El agente no pudo terminarlo'
+                            : 'Revisado, sin borrador';
+                          return <div className={`agent-chip ${s.agentStatus}`}>{label}</div>;
                         })()}
                         {c.isDm && c.lastText && <div className="card-summary dm-preview">{c.lastText}</div>}
                         <div className="card-actions" onClick={(e) => e.stopPropagation()}>
@@ -1745,6 +1757,19 @@ export default function Page() {
               <button className="modal-close" onClick={closeModal} aria-label="Cerrar">×</button>
             </div>
             <div className="modal-body">
+              {(() => {
+                const s = state.cases[modalCase.id] || {};
+                if (!s.agentStatus || s.agentStatus === 'working' || !s.agentNote) return null;
+                const head = s.agentStatus === 'draft' ? 'Borrador listo en el hilo'
+                  : s.agentStatus === 'error' ? 'El agente no pudo terminarlo' : 'Revisado, sin borrador';
+                return (
+                  <div className={`agent-note ${s.agentStatus}`}>
+                    <strong>Agente · {head}{s.agentCase ? ` · ${s.agentCase}` : ''}</strong>
+                    <div className="agent-note-text">{s.agentNote}</div>
+                    {s.agentFicha && <div className="agent-note-ficha">Ficha: {s.agentFicha}</div>}
+                  </div>
+                );
+              })()}
               {modalLoading ? (
                 <div className="loading"><span className="spinner"></span> Cargando hilo…</div>
               ) : modalMessages.length === 0 ? (

@@ -94,7 +94,7 @@ Canales actuales:
 ## SOPs por enseñar
 
 - El agente manda también `ficha`, `tema`, `sin_ficha`, `depende_de_joan`, `por_que`. `/api/agents/result` lo guarda en la lista KV `pipeline-agent-log` (máx. 3000).
-- `GET /api/agents/sops` agrupa por tema los del último mes con `sin_ficha` o `depende_de_joan` (un hilo cuenta una vez por tema). El panel lo enseña solo los viernes (y con el botón 📚 SOPs).
+- `GET /api/agents/sops` agrupa por tema los del último mes con `sin_ficha` o `depende_de_joan` (un hilo cuenta una vez por tema). El panel lo enseña en una ventana desde el botón «SOPs» (icono de libro, con el número de casos).
 - Al lanzar agentes se pasan los `TEMAS_YA_USADOS` para que reutilicen el mismo nombre y se puedan agrupar.
 
 ## Estado actual
