@@ -390,7 +390,7 @@ export default function ManualPage() {
           <h4>Auto follow-up · Copia de seguridad mensual de GetResponse</h4>
           <p><i>Aviso «Còpia de Seguridad Mensual Get Response» (primer lunes de mes).</i></p>
           <ol>
-            <li>La copia la hace Claude en el ordenador de Joan con la skill <b>getresponse-backup</b>: exporta los contactos de GetResponse y el CSV <code>Backup_Newsletter_AAAAMMDD</code> queda en Descargas.</li>
+            <li>La copia la hace Claude en el ordenador de Joan, por la API de GetResponse (solo lee): el CSV <code>Backup_Newsletter_AAAAMMDD</code> con todos los contactos queda en Descargas. Basta con decirle «haz la copia de GetResponse».</li>
             <li>Joan arrastra ese archivo a la carpeta de copias de Drive (la del enlace del aviso).</li>
             <li>Los agentes de la nube no pueden hacerla: no dejan borrador, solo la nota «Falta que tú (Joan): pedirle a Claude la copia de GetResponse y arrastrar el CSV a Drive».</li>
           </ol>
@@ -400,7 +400,7 @@ export default function ManualPage() {
           <h4>Auto follow-up · Informe mensual del Evergreen</h4>
           <p><i>Aviso «Informe Mensual del evergreen» (primer lunes de mes).</i></p>
           <ol>
-            <li>Sacar de Airtable (base CRM ICO) los datos del Evergreen del <b>mes anterior</b>: registros, leads, llamadas agendadas y hechas, ventas (número e importe) y, si se puede, la comparación con el mes de antes.</li>
+            <li>Sacar de Airtable (base CRM ICO) los datos del Evergreen del <b>mes anterior</b>. Un lead es del Evergreen si su campaña UTM es <code>ico_evergreen</code> (los lead magnets de evergreen, <code>lm-…</code>, aparte; <code>ico_launch_05</code> es del lanzamiento y no cuenta). Datos: registros, leads, llamadas agendadas y hechas, ventas (número e importe) y, si se puede, la comparación con el mes de antes.</li>
             <li>Escribir un informe corto con esos KPIs principales: una línea por dato y dos o tres frases de lectura. Nada de inventar: si un dato no está, se dice.</li>
             <li>Dejarlo como borrador en el hilo del aviso para que Joan lo revise.</li>
           </ol>
