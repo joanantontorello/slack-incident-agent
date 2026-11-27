@@ -78,7 +78,8 @@ export async function middleware(request) {
 
   // /login y /api/login son públicos
   // /api/agents/result lo llama la rutina de agentes: se valida con su pase.
-  if (pathname === '/login' || pathname === '/api/login' || pathname === '/api/agents/result') {
+  // /api/cron/revision lo llama Vercel Cron: solo actúa a las 16 h de Madrid.
+  if (pathname === '/login' || pathname === '/api/login' || pathname === '/api/agents/result' || pathname === '/api/cron/revision') {
     return NextResponse.next();
   }
 

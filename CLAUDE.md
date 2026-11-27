@@ -81,7 +81,21 @@ Canales actuales:
 - `/api/agents` crea un PASE de un solo uso en KV (`pipeline-agent-run:<pase>`, caduca 6 h), lee `/manual` como texto y dispara la rutina de Claude Code «Agentes del Pipeline de Incidencias» (`trig_01TZwkDsyUA5vp1RTefau9qr`, https://claude.ai/code/routines/trig_01TZwkDsyUA5vp1RTefau9qr) con `ROUTINE_FIRE_URL` + `ROUTINE_FIRE_TOKEN`.
 - La rutina (prompt en `agents/prompt-rutina.md`; si se cambia, actualizarlo también en la rutina) solo usa los conectores Slack y Airtable: lee, deja borrador con `slack_send_message_draft` y devuelve la nota a `POST /api/agents/result` (público en el middleware, validado con el pase).
 - El entorno de la nube necesita `slack-incident-agent.vercel.app` en «Allowed domains» para poder devolver las notas.
-- Campos en el estado del caso: `agentStatus` (working/draft/nodraft/error), `agentNote`, `agentCase`, `agentAt`, `agentDoneAt`, `agentSessionUrl`.
+- Campos en el estado del caso: `agentStatus` (working/draft/nodraft/error), `agentNote`, `agentCase`, `agentFicha`, `agentAt`, `agentDoneAt`, `agentDraftAt`, `agentSessionUrl`.
+- La lógica común está en `app/lib/agents.js` (`selectForAgents`, `launchAgents`) y la clasificación en `app/lib/classify.js`.
+- **Un borrador por hilo:** si `agentDraftAt` existe y Joan no ha escrito en el hilo desde entonces, el hilo va con `ya_tiene_borrador=sí` y el agente devuelve estado `nota` (no crea otro borrador).
+
+## Revisión automática (lunes a viernes, 16:00 Madrid)
+
+- `vercel.json` llama a `GET /api/cron/revision` a las 14:00 y a las 15:00 UTC. La ruta solo actúa si en Madrid son las 16 h de un día laborable (así se salva el cambio de hora) y como mucho una vez al día (`pipeline-auto-sweep:<fecha>` con SET NX).
+- Es pública en el middleware (no necesita CRON_SECRET; si existe, también vale `Authorization: Bearer <CRON_SECRET>` a cualquier hora). `?dry=1` solo cuenta hilos.
+- `app/lib/sweep.js` (`runSweep`) repite en el servidor lo de `loadAll` + `analyzeAll`: lee 14 días + tarjetas pendientes antiguas, ✅ de Slack → Hecho, clasifica, mueve los RESUELTO high/medium a Hecho (pone ✅ y marca leído) y lanza agentes. El resumen queda en `pipeline-auto-sweep-last` (lo devuelve `GET /api/agents` como `lastSweep`).
+
+## SOPs por enseñar
+
+- El agente manda también `ficha`, `tema`, `sin_ficha`, `depende_de_joan`, `por_que`. `/api/agents/result` lo guarda en la lista KV `pipeline-agent-log` (máx. 3000).
+- `GET /api/agents/sops` agrupa por tema los del último mes con `sin_ficha` o `depende_de_joan` (un hilo cuenta una vez por tema). El panel lo enseña solo los viernes (y con el botón 📚 SOPs).
+- Al lanzar agentes se pasan los `TEMAS_YA_USADOS` para que reutilicen el mismo nombre y se puedan agrupar.
 
 ## Estado actual
 

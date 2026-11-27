@@ -239,6 +239,26 @@ export default function ManualPage() {
           mandar en 20 horas salvo que llegue un mensaje nuevo. Máximo 15 hilos por pulsación.
           Los agentes siguen este manual: si cambias un protocolo aquí, lo siguen la próxima vez.
         </p>
+        <p>
+          <b>Revisión automática:</b> de lunes a viernes a las <b>16:00</b> (hora de España) el panel hace
+          solo lo mismo que el botón, aunque no lo tengas abierto. El botón sigue funcionando igual para
+          cuando quieras una pasada extra. Pasando el ratón por encima del botón ves cuándo fue la última.
+        </p>
+        <p>
+          Si un hilo ya tiene un borrador del agente que aún no has usado, el agente <b>no crea otro</b>
+          (Slack se quedaría con el viejo): solo actualiza la nota de la tarjeta.
+        </p>
+        <h3 id="sops">📚 SOPs por enseñar</h3>
+        <p>
+          En cada hilo el agente apunta qué ficha de este manual ha usado, o por qué no había ninguna o el
+          caso depende de ti. Los <b>viernes</b> el panel enseña arriba «Casos que se repiten y te esperan
+          a ti»: los del último mes, ordenados por veces, con uno o dos ejemplos. Cualquier otro día lo
+          abres con el botón <b>📚 SOPs</b>.
+        </p>
+        <p>
+          Elige el primero y manda un audio contando cómo lo haces. Claude lo convierte en una ficha
+          de este manual y, desde que das el OK, los agentes la usan.
+        </p>
 
         <h2>Auto-promoción por reacción</h2>
         <p>

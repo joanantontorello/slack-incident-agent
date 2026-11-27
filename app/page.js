@@ -370,6 +370,30 @@ export default function Page() {
   const [undoAction, setUndoAction] = useState(null);
   const [lastSeenTs, setLastSeenTs] = useState(0);
   const [aiProgress, setAiProgress] = useState(null); // {done, total, errors}
+  // «SOPs por enseñar»: casos repetidos del último mes sin ficha o que
+  // dependen de Joan. Se abre solo los viernes; el resto, con el botón.
+  const [sops, setSops] = useState(null); // null | { groups, loading, error }
+  const [lastSweep, setLastSweep] = useState(null);
+  const loadSops = useCallback(async () => {
+    setSops(p => ({ groups: p?.groups || [], loading: true }));
+    try {
+      const d = await fetch('/api/agents/sops').then(r => r.json());
+      setSops({ groups: d.groups || [], loading: false, error: d.error || null });
+    } catch (e) {
+      setSops({ groups: [], loading: false, error: String(e.message || e) });
+    }
+  }, []);
+  const closeSops = () => {
+    setSops(null);
+    try { localStorage.setItem('sops-closed', new Date().toISOString().slice(0, 10)); } catch (e) {}
+  };
+  useEffect(() => {
+    fetch('/api/agents').then(r => r.json()).then(d => setLastSweep(d.lastSweep || null)).catch(() => {});
+    const wd = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', weekday: 'short' }).format(new Date());
+    let closedToday = false;
+    try { closedToday = localStorage.getItem('sops-closed') === new Date().toISOString().slice(0, 10); } catch (e) {}
+    if (wd === 'Fri' && !closedToday) loadSops();
+  }, [loadSops]);
   const [dmsInfo, setDmsInfo] = useState({ error: null, since: null, hidden: true }); // estado de /api/dms (hidden: esta cuenta no ve los privados)
   const dmsSeqRef = useRef(0);
 
@@ -1239,6 +1263,20 @@ export default function Page() {
         .agent-note.working { color: #6d28d9; }
         .agent-note a { color: inherit; text-decoration: underline; }
         .agent-note-text { margin-top: 4px; white-space: pre-wrap; font-weight: 400; }
+        .agent-note-ficha { margin-top: 4px; font-size: 11.5px; opacity: .75; }
+        .sops-panel { margin: 12px 22px; padding: 14px 16px; border-radius: 12px; background: #fffbeb; border: 1px solid #fde68a; color: #78350f; font-size: 13.5px; }
+        .sops-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+        .sops-sub { font-size: 12px; opacity: .75; }
+        .sops-close { margin-left: auto; background: none; border: 0; font-size: 20px; line-height: 1; cursor: pointer; color: inherit; }
+        .sops-list { margin: 10px 0 0; padding-left: 20px; }
+        .sops-list li { margin-bottom: 8px; }
+        .sops-example { font-size: 12.5px; margin-top: 2px; opacity: .9; }
+        .sops-example a { color: inherit; text-decoration: underline; }
+        .sops-tags { margin-left: 6px; }
+        .sops-tag { display: inline-block; margin-left: 4px; padding: 1px 6px; border-radius: 6px; font-size: 11px; background: #fef3c7; border: 1px solid #fde68a; }
+        .sops-tag.joan { background: #ede9fe; border-color: #ddd6fe; color: #4c1d95; }
+        .sops-empty { margin-top: 8px; font-size: 12.5px; opacity: .8; }
+        .sops-foot { margin-top: 6px; font-size: 12px; opacity: .8; }
 
         /* SEARCH */
         .search-box { display: flex; align-items: center; gap: 8px; background: #f1f5f9; border-radius: 10px; padding: 8px 14px; flex: 1; max-width: 460px; transition: background 0.15s, box-shadow 0.15s; }
@@ -1398,11 +1436,13 @@ export default function Page() {
         <div className="header-right">
           <a className="icon-btn" href="/admin" title="Gestión de usuarios">Usuarios</a>
           <a className="icon-btn" href="/manual" target="_blank" rel="noopener noreferrer" title="Manual de uso">Manual</a>
+          <button className="icon-btn" onClick={() => (sops ? closeSops() : loadSops())} title="Casos que se repiten y te esperan a ti (último mes)">📚 SOPs</button>
           <button
             className="icon-btn ai-btn"
             onClick={analyzeAll}
             disabled={!!aiProgress || loading}
-            title="Clasificar hilos de Por revisar con IA (resueltos → Hecho, resto → badge)"
+            title={'Clasificar hilos de Por revisar con IA (resueltos → Hecho, resto → badge). Se hace solo de lunes a viernes a las 16:00.'
+              + (lastSweep && lastSweep.at ? ` Última revisión automática: ${new Date(lastSweep.at).toLocaleString('es-ES', { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` + (lastSweep.error ? ' (falló)' : ` · ${lastSweep.classified || 0} revisados · ${lastSweep.agents || 0} a los agentes`) : '')}
           >
             {aiProgress ? `IA ${aiProgress.done}/${aiProgress.total}` : '✨ Revisar con IA'}
           </button>
@@ -1431,6 +1471,44 @@ export default function Page() {
         <div className="dm-notice">
           Para ver tus mensajes privados falta darle permiso al panel en Slack.{' '}
           <a href="/manual#mensajes-privados" target="_blank" rel="noopener noreferrer">Cómo hacerlo</a>
+        </div>
+      )}
+
+      {sops && (
+        <div className="sops-panel">
+          <div className="sops-head">
+            <strong>📚 Casos que se repiten y te esperan a ti</strong>
+            <span className="sops-sub">Último mes · los agentes no tenían ficha en el manual o dependían de ti</span>
+            <button className="sops-close" onClick={closeSops} aria-label="Cerrar">×</button>
+          </div>
+          {sops.loading && <div className="sops-empty">Cargando…</div>}
+          {!sops.loading && sops.error && <div className="sops-empty">No se ha podido cargar: {sops.error}</div>}
+          {!sops.loading && !sops.error && sops.groups.length === 0 && (
+            <div className="sops-empty">Todavía no hay casos apuntados. Se llenará a medida que los agentes trabajen los hilos.</div>
+          )}
+          {!sops.loading && sops.groups.length > 0 && (
+            <ol className="sops-list">
+              {sops.groups.slice(0, 10).map(g => (
+                <li key={g.tema}>
+                  <div><b>{g.tema}</b> · {g.count} {g.count === 1 ? 'vez' : 'veces'}
+                    <span className="sops-tags">
+                      {g.sinFicha > 0 && <span className="sops-tag">sin ficha</span>}
+                      {g.dependeJoan > 0 && <span className="sops-tag joan">depende de ti</span>}
+                    </span>
+                  </div>
+                  {g.ejemplos.map((e, i) => (
+                    <div key={i} className="sops-example">
+                      {e.link ? <a href={e.link} target="slack-thread" rel="noopener noreferrer">{e.title || 'Ver hilo'}</a> : (e.title || '—')}
+                      {e.porQue && <span> — {e.porQue}</span>}
+                    </div>
+                  ))}
+                </li>
+              ))}
+            </ol>
+          )}
+          {!sops.loading && sops.groups.length > 0 && (
+            <div className="sops-foot">Elige el primero y mándale a Claude un audio contando cómo lo haces. Lo convierte en una ficha del manual.</div>
+          )}
         </div>
       )}
 
@@ -1588,6 +1666,7 @@ export default function Page() {
                           return <div className={`agent-note ${s.agentStatus}`} onClick={(e) => e.stopPropagation()}>
                             <strong>{head}{s.agentCase ? ` · ${s.agentCase}` : ''}</strong>
                             {s.agentNote && <div className="agent-note-text">{s.agentNote}</div>}
+                            {s.agentFicha && <div className="agent-note-ficha">Ficha: {s.agentFicha}</div>}
                           </div>;
                         })()}
                         {c.isDm && c.lastText && <div className="card-summary dm-preview">{c.lastText}</div>}
