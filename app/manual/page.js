@@ -225,7 +225,8 @@ export default function ManualPage() {
         <h2 id="agentes">Agentes de IA (botón «Revisar con IA»)</h2>
         <p>
           Al pulsar <b>✨ Revisar con IA</b>, primero se ordenan las tarjetas como siempre. Después,
-          los hilos marcados con <b>⚡ Tú</b> se mandan a los agentes de Claude, que trabajan en la nube
+          los hilos marcados con <b>⚡ Tú</b> y los de <b>Espera mi respuesta</b> (te mencionan y aún no has
+          contestado) se mandan a los agentes de Claude, que trabajan en la nube
           (aunque cierres el ordenador).
         </p>
         <ul>

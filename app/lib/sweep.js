@@ -44,6 +44,11 @@ function buildCase(channelId, ts, msgs, { myId, autoDoneIds, teamUrl, filter, ro
   const allText = rootText + ' ' + reps.map(r => String(r.text || '')).join(' ');
   if (filter === 'mention' && (!myId || !allText.includes(myId))) return null;
   const lastMsg = reps.length ? reps[reps.length - 1] : root;
+  // Igual que el panel: ¿espera respuesta de Joan?
+  const lastUserId = lastMsg.user || root.user || '';
+  const waitingForMe = !!myId && (reps.length === 0
+    ? rootText.includes(myId) && root.user !== myId
+    : lastUserId !== myId && allText.includes(myId));
   const reactions = Array.isArray(root.reactions) ? root.reactions : [];
   const checkedByMe = autoDoneIds.length > 0 && reactions.some(r =>
     r && DONE_EMOJIS.includes(r.name) && Array.isArray(r.users) && r.users.some(u => autoDoneIds.includes(u)));
@@ -54,6 +59,7 @@ function buildCase(channelId, ts, msgs, { myId, autoDoneIds, teamUrl, filter, ro
     title: plainTitle(rootText) || '(sin título)',
     link: teamUrl ? `${teamUrl.replace(/\/$/, '')}/archives/${channelId}/p${String(ts).replace('.', '')}` : '',
     checkedByMe,
+    waitingForMe,
     lastTs: lastMsg.ts || ts,
   };
 }

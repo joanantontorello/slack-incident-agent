@@ -1122,19 +1122,23 @@ export default function Page() {
     try {
       const fresh = await fetchServerState();
       const sc = (fresh && fresh.enabled ? fresh.cases : stateRef.current.cases) || {};
+      // Los que la IA marca como tuyos y los de «Espera mi respuesta»
+      // (mismo criterio que selectForAgents en app/lib/agents.js).
+      const isEJ = (c) => (sc[c.id] || {}).aiVerdict === 'ESPERA_JOAN';
       const toAgents = cases.filter(c => {
         if (c.isDm) return false;
         const s = sc[c.id] || {};
         const st = s.status || 'todo';
         if (s.archived || st === 'done') return false;
-        if (s.aiVerdict !== 'ESPERA_JOAN') return false;
+        if (s.aiVerdict !== 'ESPERA_JOAN' && !c.waitingForMe) return false;
         if (s.agentAt) {
           const lastMsgMs = c.lastMessageTs ? parseFloat(c.lastMessageTs) * 1000 : 0;
           const recent = Date.now() - s.agentAt < 20 * 60 * 60 * 1000;
           if (recent && lastMsgMs <= s.agentAt) return false; // ya trabajado y sin novedades
         }
         return true;
-      }).slice(0, 15);
+      }).sort((a, b) => (isEJ(b) - isEJ(a)) || ((b.lastMessageTs || 0) - (a.lastMessageTs || 0)))
+        .slice(0, 15);
       if (toAgents.length > 0) {
         const res = await fetch('/api/agents', {
           method: 'POST',

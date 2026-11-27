@@ -114,22 +114,30 @@ const LOG_MAX = 3000;
 const MAX_AGENT_CASES = 15;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// Qué hilos se mandan a los agentes: esperan a Joan, no están hechos ni
-// archivados, y no se trabajaron en las últimas 20 h sin mensajes nuevos.
-// cases: [{ id, isDm, lastMessageTs (segundos) }], stateCases: estado KV.
+// Qué hilos se mandan a los agentes: los que la IA marca como «te espera a
+// ti» (ESPERA_JOAN) y los de «Espera mi respuesta» (mencionan a Joan y aún
+// no ha contestado). Nunca privados, hechos ni archivados, y no se repiten
+// en 20 h si no hay mensajes nuevos. Primero los ESPERA_JOAN, luego los más
+// recientes.
+// cases: [{ id, isDm, waitingForMe, lastMessageTs (segundos) }], stateCases: estado KV.
 export function selectForAgents(cases, stateCases) {
   return cases.filter(c => {
     if (c.isDm) return false;
     const s = stateCases[c.id] || {};
     const st = s.status || 'todo';
     if (s.archived || st === 'done') return false;
-    if (s.aiVerdict !== 'ESPERA_JOAN') return false;
+    if (s.aiVerdict !== 'ESPERA_JOAN' && !c.waitingForMe) return false;
     if (s.agentAt) {
       const lastMsgMs = c.lastMessageTs ? parseFloat(c.lastMessageTs) * 1000 : 0;
       const recent = Date.now() - s.agentAt < 20 * 60 * 60 * 1000;
       if (recent && lastMsgMs <= s.agentAt) return false;
     }
     return true;
+  }).sort((a, b) => {
+    const ea = (stateCases[a.id] || {}).aiVerdict === 'ESPERA_JOAN' ? 1 : 0;
+    const eb = (stateCases[b.id] || {}).aiVerdict === 'ESPERA_JOAN' ? 1 : 0;
+    if (ea !== eb) return eb - ea;
+    return (b.lastMessageTs || 0) - (a.lastMessageTs || 0);
   }).slice(0, MAX_AGENT_CASES);
 }
 
